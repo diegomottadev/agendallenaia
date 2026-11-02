@@ -6,7 +6,8 @@
 # solo se hace pull. Los secretos viven en el .env del servidor (chmod 600),
 # nunca en el repositorio ni en la imagen.
 x-app: &app
-  image: ghcr.io/diegomottadev/agendallena:${IMAGE_TAG:-latest}
+  # IMAGE_NAME lo exporta el workflow de deploy con el repo que publico la imagen.
+  image: ${IMAGE_NAME:-ghcr.io/diegomottadev/agendallenaia}:${IMAGE_TAG:-latest}
   env_file: .env
   restart: unless-stopped
   depends_on:

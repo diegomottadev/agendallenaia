@@ -17,9 +17,9 @@ flowchart LR
     end
 
     subgraph GH["GitHub"]
-        Repo["Repo agendallena"] -->|push a main| CI["Actions: tests + E2E"]
+        Repo["Repo agendallenaia"] -->|push a main| CI["Actions: tests + E2E"]
         CI -->|verde| CD["Actions: deploy"]
-        CD -->|build + push| GHCR[("GHCR<br>ghcr.io/diegomottadev/agendallena")]
+        CD -->|build + push| GHCR[("GHCR<br>ghcr.io/diegomottadev/agendallenaia")]
     end
 
     subgraph DO["Droplet DigitalOcean · Ubuntu 24.04 · /opt/agendallena"]
@@ -80,7 +80,7 @@ flowchart LR
 4. **Clave de deploy:** generá un par **solo para el CD** (`ssh-keygen -t ed25519 -f deploy_agendallena`). La pública va a `/home/deploy/.ssh/authorized_keys` y la privada al secret `DO_SSH_KEY`.
 5. **`.env` del servidor:** copiá `.env.production.example` a `/opt/agendallena/.env` y completalo (`DOMAIN`, `APP_KEY`, contraseñas, Meta y Google). Después `chmod 600 .env`. Para la `APP_KEY`, en tu máquina: `docker compose exec app php artisan key:generate --show`.
 6. **Imagen privada:** si el paquete de GHCR queda privado, en el droplet corré `docker login ghcr.io` con un token de solo lectura (`read:packages`). Si no, hacé público el paquete.
-7. **GitHub** (repo `agendallena`, Settings → Secrets and variables → Actions):
+7. **GitHub** (repo `agendallenaia`, Settings → Secrets and variables → Actions):
    - **Secrets:** `DO_HOST` (la IP), `DO_USER` (`deploy`) y `DO_SSH_KEY`.
    - **Variables:** `DOMAIN` (el subdominio) y **`DEPLOY_ENABLED=true`**. Esta última enciende el workflow.
    - Creá el *environment* `produccion` si querés aprobación manual antes de cada deploy.
