@@ -42,11 +42,11 @@ flowchart LR
 
 | Pieza | Archivo | Qué hace |
 | :-- | :-- | :-- |
-| Imagen | [`docker/prod/Dockerfile`](https://github.com/diegomottadev/agendallena/blob/main/docker/prod/Dockerfile) | Multi-stage: assets con Node, vendor sin dev, runtime FrankenPHP 1.11 con PHP 8.4 y `timezonedb` (tzdata al día, T-031). |
-| Arranque | [`docker/prod/entrypoint.sh`](https://github.com/diegomottadev/agendallena/blob/main/docker/prod/entrypoint.sh) | Cachea config, rutas y vistas con el `.env` ya montado. |
-| Servicios | [`docker-compose.prod.yml`](https://github.com/diegomottadev/agendallena/blob/main/docker-compose.prod.yml) | `web`, `worker`, `scheduler`, `mysql` y `redis`, con volúmenes persistentes. |
-| CD | [`.github/workflows/deploy.yml`](https://github.com/diegomottadev/agendallena/blob/main/.github/workflows/deploy.yml) | Tras `tests` en verde sobre `main`: build, push a GHCR, SSH al droplet, `pull`, `up -d`, `migrate --force` y `queue:restart`. |
-| Variables | [`.env.production.example`](https://github.com/diegomottadev/agendallena/blob/main/.env.production.example) | Plantilla del `.env` del servidor. |
+| Imagen | [`docker/prod/Dockerfile`](../docker/prod/Dockerfile) | Multi-stage: assets con Node, vendor sin dev, runtime FrankenPHP 1.11 con PHP 8.4 y `timezonedb` (tzdata al día, T-031). |
+| Arranque | [`docker/prod/entrypoint.sh`](../docker/prod/entrypoint.sh) | Cachea config, rutas y vistas con el `.env` ya montado. |
+| Servicios | [`docker-compose.prod.yml`](../docker-compose.prod.yml) | `web`, `worker`, `scheduler`, `mysql` y `redis`, con volúmenes persistentes. |
+| CD | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) | Tras `tests` en verde sobre `main`: build, push a GHCR, SSH al droplet, `pull`, `up -d`, `migrate --force` y `queue:restart`. |
+| Variables | [`.env.production.example`](../.env.production.example) | Plantilla del `.env` del servidor. |
 
 **Por qué así:**
 - **FrankenPHP:** trae Caddy adentro y saca solo el certificado HTTPS que Meta exige para el webhook, sin nginx ni certbot.

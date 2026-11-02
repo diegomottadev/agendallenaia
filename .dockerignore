@@ -1,0 +1,23 @@
+# Nada de secretos ni artefactos locales dentro de la imagen de produccion.
+.env
+.env.*
+!.env.example
+!.env.production.example
+.git
+.github
+.claude
+CLAUDE.md
+node_modules
+vendor
+public/build
+public/hot
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php
+e2e
+tests
+docs
+docker-compose*.yml
+consigna.md

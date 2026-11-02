@@ -1,0 +1,93 @@
+# CD a un droplet de DigitalOcean. Ver docs/despliegue.md.
+#
+# ⚠️ Apagado hasta que exista el servidor: solo corre si la variable del
+# repositorio DEPLOY_ENABLED vale "true" (Settings → Secrets and variables →
+# Actions → Variables). Asi no falla en rojo mientras no haya donde desplegar.
+#
+# Corre despues de que el workflow `tests` termina en verde sobre main: nunca se
+# despliega un commit con la suite roja.
+
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-produccion
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: produccion
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      IMAGEN: ghcr.io/${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/prod/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGEN }}:${{ github.event.workflow_run.head_sha || github.sha }}
+            ${{ env.IMAGEN }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Copiar el compose de produccion al servidor
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: /opt/agendallena
+
+      - name: Desplegar
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          envs: IMAGE_TAG
+          script_stop: true
+          script: |
+            cd /opt/agendallena
+            export IMAGE_TAG
+            docker compose -f docker-compose.prod.yml pull web worker scheduler
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml exec -T web php artisan migrate --force
+            # El worker carga el codigo una vez: hay que avisarle que hay version nueva.
+            docker compose -f docker-compose.prod.yml exec -T web php artisan queue:restart
+            docker image prune -f
+
+      - name: Verificar que responde
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "https://${{ vars.DOMAIN }}/login" -o /dev/null
