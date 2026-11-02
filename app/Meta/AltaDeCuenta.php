@@ -99,7 +99,7 @@ class AltaDeCuenta
         $respuesta = Http::withToken((string) $meta->access_token)
             ->timeout(30)
             ->post(
-                'https://graph.facebook.com/'.self::VERSION_API.'/'.$wabaId.'/message_templates',
+                GraphApi::base().'/'.self::VERSION_API.'/'.$wabaId.'/message_templates',
                 $definicion,
             );
 

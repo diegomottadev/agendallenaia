@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\GoogleOAuthController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
+use App\Http\Controllers\Dev\GoogleFalsoController;
+use App\Http\Controllers\Dev\MetaFalsaController;
+use App\Http\Middleware\SoloConSimulador;
 use App\Http\Middleware\VerifyMetaSignature;
 use Illuminate\Support\Facades\Route;
 
@@ -55,3 +58,36 @@ Route::prefix('v1/webhooks')->group(function () {
         ->middleware(VerifyMetaSignature::class)
         ->name('webhooks.whatsapp.receive');
 });
+
+/*
+ * Mock de la Graph API de Meta, para desarrollo (`META_GRAPH_URL`).
+ *
+ * Va en `api` por lo mismo que el webhook: quien llama es `MetaAdapter` por
+ * HTTP, sin sesión ni CSRF. `SoloConSimulador` lo apaga fuera de desarrollo.
+ * Las rutas copian las de Meta debajo del prefijo, así el código de producción
+ * solo cambia la base de la URL y nada más.
+ */
+Route::prefix('dev/meta/{version}')
+    ->middleware(SoloConSimulador::class)
+    ->group(function () {
+        Route::post('{phoneNumberId}/messages', [MetaFalsaController::class, 'enviarMensaje'])
+            ->name('dev.meta.mensajes');
+        Route::get('{wabaId}/message_templates', [MetaFalsaController::class, 'listarPlantillas'])
+            ->name('dev.meta.plantillas');
+        Route::post('{wabaId}/message_templates', [MetaFalsaController::class, 'crearPlantilla'])
+            ->name('dev.meta.plantillas.crear');
+    });
+
+/*
+ * Mock de Google Calendar, para desarrollo (`GOOGLE_API_URL`). Mismo criterio
+ * que el de Meta: copia las rutas de Google debajo del prefijo.
+ */
+Route::prefix('dev/google/calendar/v3')
+    ->middleware(SoloConSimulador::class)
+    ->group(function () {
+        Route::post('freeBusy', [GoogleFalsoController::class, 'freeBusy'])->name('dev.google.freebusy');
+        Route::post('calendars/primary/events', [GoogleFalsoController::class, 'crearEvento'])->name('dev.google.eventos.crear');
+        Route::get('calendars/primary/events', [GoogleFalsoController::class, 'listarEventos'])->name('dev.google.eventos');
+        Route::get('calendars/primary/events/{id}', [GoogleFalsoController::class, 'verEvento'])->name('dev.google.eventos.ver');
+        Route::delete('calendars/primary/events/{id}', [GoogleFalsoController::class, 'borrarEvento'])->name('dev.google.eventos.borrar');
+    });

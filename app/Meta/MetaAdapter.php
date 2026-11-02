@@ -83,7 +83,7 @@ class MetaAdapter
          * es la misma columna con la que `ProcessMessageJob` mapea el webhook
          * entrante a su tenant, así que la entrada y la salida usan el mismo número.
          */
-        $url = 'https://graph.facebook.com/'.self::VERSION_API
+        $url = GraphApi::base().'/'.self::VERSION_API
             .'/'.$this->integration->account_identifier.'/messages';
 
         $respuesta = Http::withToken((string) $this->integration->access_token)

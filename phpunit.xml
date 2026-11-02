@@ -50,5 +50,13 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            La suite nunca usa los mocks de Meta y Google del .env de desarrollo: sus
+            `Http::fake` esperan las URLs reales de Graph API y Calendar. `force` porque el
+            .env de la maquina puede tenerlas apuntando a `/api/dev/meta`.
+        -->
+        <env name="META_GRAPH_URL" value="https://graph.facebook.com" force="true"/>
+        <env name="META_SIMULADOR" value="false" force="true"/>
+        <env name="GOOGLE_API_URL" value="https://www.googleapis.com" force="true"/>
     </php>
 </phpunit>

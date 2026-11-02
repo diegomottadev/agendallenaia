@@ -8,6 +8,21 @@ return [
         'app_secret' => env('META_APP_SECRET'),
         'access_token' => env('META_ACCESS_TOKEN'),
         'verify_token' => env('META_VERIFY_TOKEN'),
+
+        /*
+         * Base de la Graph API. En produccion es siempre la de Meta; en
+         * desarrollo se apunta al mock de `routes/api.php` (`/api/dev/meta`)
+         * para que ningun mensaje salga a un telefono real. Ver `App\Dev`.
+         */
+        'graph_url' => env('META_GRAPH_URL', 'https://graph.facebook.com'),
+
+        /*
+         * Simulador de WhatsApp (`/dev/whatsapp` y `php artisan dev:whatsapp`).
+         * Apagado por defecto y **nunca** disponible en produccion, aunque la
+         * variable quede encendida por error: lo corta `SoloConSimulador`.
+         */
+        'simulador' => (bool) env('META_SIMULADOR', false),
+        'simulador_webhook_url' => env('META_SIMULADOR_WEBHOOK_URL', 'http://localhost:8000/api/v1/webhooks/whatsapp'),
     ],
 
     /*
@@ -26,6 +41,13 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect_uri' => env('GOOGLE_REDIRECT_URI', 'http://localhost:8000/api/v1/oauth/google/callback'),
+
+        /*
+         * Base de la API de Calendar. En produccion es siempre la de Google; en
+         * desarrollo se apunta al mock de `routes/api.php` (`/api/dev/google`)
+         * para recorrer la reserva completa sin un calendario real.
+         */
+        'api_url' => env('GOOGLE_API_URL', 'https://www.googleapis.com'),
         'scopes' => [
             'https://www.googleapis.com/auth/calendar.events',
             'https://www.googleapis.com/auth/calendar.readonly',

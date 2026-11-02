@@ -60,7 +60,7 @@ class EstadoDePlantillasEnMeta
         $respuesta = Http::withToken((string) $meta->access_token)
             ->timeout(30)
             ->get(
-                'https://graph.facebook.com/'.self::VERSION_API.'/'.$wabaId.'/message_templates',
+                GraphApi::base().'/'.self::VERSION_API.'/'.$wabaId.'/message_templates',
                 // Se piden los dos campos que deciden el envío y nada más: el
                 // cuerpo completo de las tres plantillas es payload que no se
                 // mira, en una llamada que corre por cada PyME en cada corrida.

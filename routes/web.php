@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Dev\SimuladorWhatsAppController;
 use App\Http\Controllers\Panel\AsistenciaController;
 use App\Http\Controllers\Panel\ConfiguracionAgendaController;
 use App\Http\Controllers\Panel\ConfiguracionMensajesController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Panel\ConversacionesController;
 use App\Http\Controllers\Panel\LoginController;
 use App\Http\Controllers\Panel\RecordatoriosFallidosController;
 use App\Http\Controllers\Panel\TurnosEnDudaController;
+use App\Http\Middleware\SoloConSimulador;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -154,3 +156,17 @@ Route::middleware(['auth', 'avisos-de-integracion'])->prefix('panel')->group(fun
         Route::post('planilla/crear', [ConfiguracionPlanillaController::class, 'crear'])->name('planilla.crear');
     });
 });
+
+/*
+ * Simulador de WhatsApp para desarrollo: un chat contra el bot real sin pasar
+ * por Meta. Sin login a propósito —el cliente de WhatsApp tampoco lo tiene— y
+ * apagado fuera de desarrollo por `SoloConSimulador`. Ver `App\Dev\SimuladorDeMeta`.
+ */
+Route::prefix('dev/whatsapp')
+    ->middleware(SoloConSimulador::class)
+    ->group(function () {
+        Route::get('/', [SimuladorWhatsAppController::class, 'index'])->name('dev.whatsapp');
+        Route::get('mensajes', [SimuladorWhatsAppController::class, 'mensajes'])->name('dev.whatsapp.mensajes');
+        Route::post('enviar', [SimuladorWhatsAppController::class, 'enviar'])->name('dev.whatsapp.enviar');
+        Route::post('falla', [SimuladorWhatsAppController::class, 'falla'])->name('dev.whatsapp.falla');
+    });

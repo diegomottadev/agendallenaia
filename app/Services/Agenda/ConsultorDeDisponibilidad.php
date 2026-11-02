@@ -5,6 +5,7 @@ namespace App\Services\Agenda;
 use App\Models\BusinessSetting;
 use App\Models\Integration;
 use App\Models\Tenant;
+use App\Services\Google\GoogleApi;
 use App\Services\Google\GoogleConnection;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
@@ -34,8 +35,6 @@ use Illuminate\Support\Facades\Log;
  */
 class ConsultorDeDisponibilidad
 {
-    private const URL_FREEBUSY = 'https://www.googleapis.com/calendar/v3/freeBusy';
-
     public function __construct(private readonly GoogleConnection $google) {}
 
     /**
@@ -174,7 +173,7 @@ class ConsultorDeDisponibilidad
     ): array {
         $respuesta = $this->google->ejecutar($integration, fn (string $token) => Http::withToken($token)
             ->timeout(20)
-            ->post(self::URL_FREEBUSY, [
+            ->post(GoogleApi::base().'/calendar/v3/freeBusy', [
                 // La ventana viaja en UTC (RNF-02); `timeZone` es para que Google
                 // interprete los límites de día si hiciera falta.
                 'timeMin' => $desde->utc()->toRfc3339String(),

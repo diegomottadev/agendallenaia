@@ -1,7 +1,13 @@
 services:
   app:
     build: .
-    command: php artisan serve --host=0.0.0.0 --port=8000
+    # --no-reload: sin el, `artisan serve` ignora PHP_CLI_SERVER_WORKERS y atiende
+    # de a un request. El simulador de WhatsApp se llama a si mismo para mandar el
+    # webhook firmado, y con un solo worker eso se traba. Costo: un cambio en el
+    # .env pide `docker compose restart app` (el codigo ya lo pedia por opcache).
+    command: php artisan serve --host=0.0.0.0 --port=8000 --no-reload
+    environment:
+      PHP_CLI_SERVER_WORKERS: 4
     ports:
       - "8000:8000"
     volumes:
@@ -23,6 +29,27 @@ services:
       app:
         condition: service_started
     restart: unless-stopped
+
+  # E2E con Playwright (`e2e/`). No arranca con `up`: se corre a demanda con
+  #   docker compose --profile e2e run --rm e2e
+  # Necesita app y worker levantados y el simulador encendido (META_SIMULADOR,
+  # META_GRAPH_URL y GOOGLE_API_URL apuntando a los mocks; ver .env.example).
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+    profiles: [e2e]
+    working_dir: /e2e
+    user: "${E2E_UID:-1000}:${E2E_GID:-1000}"
+    environment:
+      HOME: /tmp
+      BASE_URL: http://app:8000
+      CI: ${CI:-}
+      CAPTURAS: ${CAPTURAS:-}
+    volumes:
+      - ./e2e:/e2e
+    command: sh -c "npm install --no-audit --no-fund && npx playwright test"
+    depends_on:
+      app:
+        condition: service_started
 
   mysql:
     image: mysql:8.4

@@ -18,8 +18,6 @@ use Illuminate\Support\Facades\Log;
  */
 class CalendarioDeGoogle
 {
-    private const URL_EVENTOS = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
-
     /**
      * Marca que identifica los eventos que creamos nosotros.
      *
@@ -131,7 +129,7 @@ class CalendarioDeGoogle
 
         $respuesta = $this->conexion->ejecutar($integration, fn (string $token) => Http::withToken($token)
             ->timeout(30)
-            ->post(self::URL_EVENTOS, $cuerpo));
+            ->post(self::urlEventos(), $cuerpo));
 
         /*
          * T-030 · AC-22.3 · `409 duplicate` **no es un fallo**: es Google
@@ -207,7 +205,7 @@ class CalendarioDeGoogle
 
             $respuesta = $this->conexion->ejecutar($integration, fn (string $token) => Http::withToken($token)
                 ->timeout(30)
-                ->get(self::URL_EVENTOS.'?'.$query));
+                ->get(self::urlEventos().'?'.$query));
 
             if (! $respuesta->successful()) {
                 Log::error('Google rechazó el listado de eventos para la conciliación', [
@@ -335,7 +333,7 @@ class CalendarioDeGoogle
     {
         $respuesta = $this->conexion->ejecutar($integration, fn (string $token) => Http::withToken($token)
             ->timeout(30)
-            ->delete(self::URL_EVENTOS.'/'.urlencode($eventId)));
+            ->delete(self::urlEventos().'/'.urlencode($eventId)));
 
         // Google devuelve 410 si el evento ya no existe: para nosotros es éxito,
         // porque el estado final deseado —que no esté— ya se cumple.
@@ -361,7 +359,7 @@ class CalendarioDeGoogle
     {
         $respuesta = $this->conexion->ejecutar($integration, fn (string $token) => Http::withToken($token)
             ->timeout(30)
-            ->get(self::URL_EVENTOS.'/'.urlencode($eventId)));
+            ->get(self::urlEventos().'/'.urlencode($eventId)));
 
         if (! $respuesta->successful()) {
             Log::info('El evento del turno ya no está en Google Calendar', [
@@ -409,5 +407,11 @@ class CalendarioDeGoogle
         $lineas[] = 'Agendado por AgendaLlena.';
 
         return implode("\n", $lineas);
+    }
+
+    /** Los eventos del calendario principal, sobre la base configurada (ver `GoogleApi`). */
+    private static function urlEventos(): string
+    {
+        return GoogleApi::base().'/calendar/v3/calendars/primary/events';
     }
 }
