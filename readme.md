@@ -13,7 +13,7 @@
 > - **Documentación completa:** [`.claude/docs/`](.claude/docs/README.md). Incluye PRD, lean canvas, C4, DER, flujos, 26 historias, 50 tickets, story maps, estimación y decisiones.
 > - **Prompts:** [`prompts.md`](prompts.md), con los prompts clave de cada sección.
 > - **Contexto de la IA:** [`CLAUDE.md`](CLAUDE.md), el contexto con el que trabajan los agentes del proyecto.
-> - **Código:** [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena).
+> - **Código:** en este mismo repo (`app/`, `resources/`, `database/`, `tests/`, `e2e/`), traído con su historial desde [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena). El README técnico original, en inglés, está en [`docs/README-codigo.md`](docs/README-codigo.md).
 
 ---
 
@@ -39,8 +39,8 @@ Mientras tanto, el proyecto corre en local con Docker ([1.4](#14-instrucciones-d
 
 ### 0.5. URL o archivo comprimido del repositorio
 
-- Código: https://github.com/diegomottadev/agendallena
-- Entrega del máster (este repo): https://github.com/diegomottadev/agendallenaia
+- **Este repo (código y documentación):** https://github.com/diegomottadev/agendallenaia
+- Repo de desarrollo original: https://github.com/diegomottadev/agendallena
 
 ---
 
@@ -140,8 +140,8 @@ Recorridos documentados:
 **1. Levantar el proyecto**
 
 ```bash
-git clone https://github.com/diegomottadev/agendallena.git
-cd agendallena
+git clone https://github.com/diegomottadev/agendallenaia.git
+cd agendallenaia
 cp .env.example .env
 
 docker compose up -d mysql redis
@@ -774,6 +774,6 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 - **Por qué:** la entrega 1 pide la idea, la estructura y el diseño. El proyecto se construyó spec-first (PRD → story maps → historias → tickets → tests → código), así que la documentación ya existía; el PR la publica en el formato de la plantilla.
 - **Impacto:** solo documentación. Los prompts que no se habían guardado se reconstruyeron y están marcados como tales.
 
-**Pull Request 2** · ⚠️ *Entrega 2:* el simulador de WhatsApp y Google, el E2E con Playwright y el despliegue preparado ya están en la rama `feature/simulador-e2e-despliegue` del repo de código. El PR se documenta acá cuando se abra.
+**Pull Request 2** · *Entrega 2: código funcional* (`feature-entrega2-DM`). Trae el código con su historial desde el repo de desarrollo: backend, panel, base de datos, tests, E2E, simulador y despliegue preparado. ⚠️ Se documenta acá cuando se abra.
 
 **Pull Request 3** · ⚠️ *Entrega final.*
