@@ -51,7 +51,30 @@ REJECT: premature optimization, generic abstractions, speculative flexibility [.
 
 *Cómo guié al asistente:* es una persona reutilizable que los demás prompts adoptan "verbatim". Le agregué una sección de resultados obligatoria: qué se hace, qué se difiere y por qué.
 
-⚠️ **Pendiente:** los prompts de creación del [lean canvas](.claude/docs/01-producto/01-lean-canvas.md) y del [PRD](.claude/docs/01-producto/02-prd.md) no se guardaron. Hay que recuperarlos del historial de conversaciones o reconstruirlos, marcando la reconstrucción como tal.
+**Prompts de creación del lean canvas y del PRD** (reconstruidos)
+
+> ⚠️ **Reconstruidos, no son los originales.** El [lean canvas](.claude/docs/01-producto/01-lean-canvas.md) y el [PRD](.claude/docs/01-producto/02-prd.md) se escribieron antes de que existiera la carpeta `aprobados/`, y esas conversaciones no se conservaron. Los prompts de abajo se reconstruyeron el 2026-11-02 por ingeniería inversa de cada artefacto. Cada archivo explica qué parte es fiable (la estructura de salida) y qué es inferencia (la redacción).
+
+- [`2026-07-xx-lean-canvas.md`](.claude/prompts/aprobados/2026-07-xx-lean-canvas.md)
+  ```markdown
+  # Rol
+  Actuás como estratega de producto y emprendedor serial con experiencia en Lean Startup y en vender
+  software B2B a PyMEs latinoamericanas [...]
+  # Objetivo
+  Producir el Lean Canvas de un SaaS multi-tenant de agendamiento y cotización por WhatsApp para PyMEs,
+  como un único diagrama mermaid [...] que renderice los nueve bloques del canvas.
+  ```
+- [`2026-07-xx-prd-mvp.md`](.claude/prompts/aprobados/2026-07-xx-prd-mvp.md)
+  ```markdown
+  # Rol
+  Actuás como Senior Product Manager técnico con experiencia en SaaS B2B multi-tenant y en integraciones
+  con la API oficial de WhatsApp (Meta Cloud API) y Google Workspace [...]
+  # Objetivo
+  Escribir el PRD del MVP Release 1.0 [...]: qué entra, qué no, cómo se mide, qué tiene que hacer el
+  sistema y cómo se verifica que lo hace.
+  ```
+
+*Cómo guié al asistente:* el PRD salió del lean canvas y fijó los IDs (`RF-*`, `RNF-*`, `CA-*`) que después usan todas las historias y los tickets. Las "decisiones cerradas (T-007)" y las reescrituras que hoy tiene el PRD son ediciones posteriores, hechas a medida que la construcción encontraba contradicciones; no salieron de este prompt.
 
 ---
 
@@ -59,7 +82,21 @@ REJECT: premature optimization, generic abstractions, speculative flexibility [.
 
 ### **2.1. Diagrama de arquitectura:**
 
-⚠️ **Pendiente:** el prompt con el que se generaron los C4 de nivel 2 y 3 ([contenedores](.claude/docs/02-arquitectura/01-c4-nivel-2-contenedores.md), [componentes](.claude/docs/02-arquitectura/02-c4-nivel-3-componentes.md)) no se guardó en `aprobados/`.
+**Prompt 1: C4 nivel 2 y 3** (reconstruido) · [`2026-07-xx-c4-contenedores-y-componentes.md`](.claude/prompts/aprobados/2026-07-xx-c4-contenedores-y-componentes.md)
+
+> ⚠️ Reconstruido por ingeniería inversa de los diagramas [de contenedores](.claude/docs/02-arquitectura/01-c4-nivel-2-contenedores.md) y [de componentes](.claude/docs/02-arquitectura/02-c4-nivel-3-componentes.md). El original no se guardó.
+
+```markdown
+# Rol
+Actuás como arquitecto de software senior con experiencia en Laravel, sistemas orientados a eventos con
+colas, y modelo C4 de Simon Brown. Diagramás para que un desarrollador nuevo entienda en un minuto qué
+corre dónde y por dónde entra cada request.
+# Objetivo
+Producir los diagramas C4 nivel 2 (contenedores) y C4 nivel 3 (componentes del backend Laravel) del MVP
+descripto en el PRD, como dos flowcharts mermaid.
+```
+
+*Cómo guié al asistente:* los diagramas tenían que salir del PRD, en particular de RF-A2 (responder `200` antes de procesar) y RNF-01 (multi-tenant). El 2026-08-25 corregí el C4 nivel 2 a mano: el scheduler figuraba dentro del worker y en realidad **no corría en ningún despliegue**. Lo separé en su propia caja.
 
 ### **2.2. Descripción de componentes principales:**
 
@@ -71,15 +108,31 @@ REJECT: premature optimization, generic abstractions, speculative flexibility [.
 
 ### **2.3. Descripción de alto nivel del proyecto y estructura de ficheros**
 
-⚠️ **Pendiente.**
+**Prompt 1: estudiar el proyecto y levantarlo** · conversación con Claude Code del 2026-11-02
+
+> Pedido original: *"estudia el proyecto y que tecnologias usa y levantolo con las imagenes de docker que tenemos disponibles salvo que no concidia su version y lo mismo la db"*
+
+*Cómo guié al asistente:* le pedí que **verificara versiones** en lugar de suponerlas. Reutilizó la imagen local de PHP 8.4 porque coincidía, y bajó MySQL 8.4 y Redis 7 porque las locales eran 8.0 y 8.10. De ese relevamiento salieron el mapa de carpetas y de componentes de las secciones 2.2 y 2.3 del readme.
 
 ### **2.4. Infraestructura y despliegue**
 
-⚠️ **Pendiente:** se completa con la entrega final, cuando exista el despliegue público.
+**Prompt 1: despliegue preparado en DigitalOcean** · conversación con Claude Code del 2026-11-02
+
+> Pedido original: elegí *"VPS con Docker"* sobre DigitalOcean, con subdominio propio, y aclaré: *"aun no tengo hecho el dominio ni configurado para digital ocean [...] seria en otro momento pero tenelo preparado"*
+
+*Cómo guié al asistente:* le pedí que lo dejara **listo y apagado**: un CD que no corre hasta que una variable lo encienda, para no tener builds rojos mientras no exista el servidor. Al construir la imagen de producción detectó que la tzdata de la base era vieja (2025.3 contra el mínimo de 2026.3 que exige la suite de husos) y la resolvió con `timezonedb`, que llevó la tzdata a 2026.6. Resultado: [`docs/despliegue.md`](docs/despliegue.md).
 
 ### **2.5. Seguridad**
 
-⚠️ **Pendiente.** Las reglas de seguridad (firma HMAC, aislamiento por tenant, tokens encriptados) están en [`CLAUDE.md`](CLAUDE.md), y el agente [`invariantes-auditor`](.claude/agents/invariantes-auditor.md) las verifica en cada cambio. Falta documentar el prompt con el que se definieron.
+Las reglas de seguridad (firma HMAC, aislamiento por tenant, tokens encriptados, secretos fuera de los logs) son invariantes del proyecto escritos en [`CLAUDE.md`](CLAUDE.md). El agente [`invariantes-auditor`](.claude/agents/invariantes-auditor.md) las verifica en cada cambio de código.
+
+**Prompt 1: simulador sin abrir una puerta en producción** · conversación con Claude Code del 2026-11-02
+
+> Pedido original: *"hay forma de mokear lo de whastapp api clound mientras se desarrolla? para no usar directamente"*
+
+*Cómo guié al asistente:* pedí que lo simulado pasara por el mismo camino que un mensaje real, con firma HMAC, cola y worker. A partir de ahí, la condición de seguridad fue que un endpoint capaz de firmar webhooks con el secreto de Meta **no puede existir en producción**. Por eso `SoloConSimulador` devuelve `404` siempre con `APP_ENV=production`, aunque la variable quede encendida por error, y hay tests que lo verifican.
+
+⚠️ **Pendiente:** el prompt original con el que se definieron los invariantes de `CLAUDE.md` no se guardó.
 
 ### **2.6. Tests**
 
@@ -89,17 +142,54 @@ REJECT: premature optimization, generic abstractions, speculative flexibility [.
 
 *Cómo guié al asistente:* los agentes [`tdd-test-writer`](.claude/agents/tdd-test-writer.md), [`tdd-implementer`](.claude/agents/tdd-implementer.md) y [`tdd-refactorer`](.claude/agents/tdd-refactorer.md) trabajan **cada uno limitado a su fase**: el que escribe el test no implementa, y el que implementa no toca el test. El prompt recortó lo que cada agente revisaba para quedarse con los hallazgos que más valen. Le recordé que la `description` está siempre en contexto y que el cuerpo solo se carga al despacharlo, así que tenía que ser corta.
 
+**Prompt 2: E2E del flujo principal con Playwright** · conversación con Claude Code del 2026-11-02
+
+> Pedido original: elegí *"Playwright"* para el test E2E de navegador y *"Simular Google"* para que el flujo completo corra en local.
+
+*Cómo guié al asistente:* el E2E tenía que recorrer el flujo **como lo vive cada actor**: el cliente reserva por WhatsApp y la dueña ve el turno en el panel, sin atajos por la base. El mismo test genera las capturas y el video del readme, así la evidencia se regenera con un comando. Al correrlo apareció un **bug real**: el panel muestra "Sin nombre" porque el nombre del cliente no se copia a `conversations.user_name`. Le pedí que no lo tapara en el test: quedó documentado y pendiente de corregir con TDD.
+
 ---
 
 ## 3. Modelo de Datos
 
-⚠️ **Pendiente:** el prompt del [DER](.claude/docs/02-arquitectura/03-der-entidad-relacion.md) y del [modelo de datos](.claude/docs/02-arquitectura/04-modelo-de-datos.md) no se guardó. Además, esos documentos quedaron detrás del esquema real; el `readme.md` de esta entrega trae el diagrama al día.
+**Prompt 1: DER y modelo de datos** (reconstruido) · [`2026-07-xx-der-y-modelo-de-datos.md`](.claude/prompts/aprobados/2026-07-xx-der-y-modelo-de-datos.md)
+
+> ⚠️ Reconstruido por ingeniería inversa de la **versión original** del [DER](.claude/docs/02-arquitectura/03-der-entidad-relacion.md) y del [modelo de datos](.claude/docs/02-arquitectura/04-modelo-de-datos.md). El original no se guardó.
+
+```markdown
+# Rol
+Actuás como arquitecto de datos senior con experiencia en MySQL 8, Laravel Eloquent y SaaS multi-tenant
+de base compartida. Diseñás pensando en el índice que va a usar cada consulta caliente y en que una PyME
+nunca vea los datos de otra.
+# Objetivo
+Diseñar el modelo de datos del MVP y entregarlo en dos documentos: el diagrama entidad-relación en
+mermaid y el modelo de datos técnico con principios y DDL ejecutable.
+```
+
+**Prompt 2: llevar el modelo al esquema real** · conversación con Claude Code del 2026-11-02
+
+> Pedido original, sobre la lista de pendientes de la entrega (que incluía el DER y `04-modelo-de-datos.md` desactualizados): *"entonces crea y agregalos y hazme preguntas si tienes dudas"*, y después *"puedes usar otro agente para ir modificando los docs?"*
+
+*Cómo guié al asistente:* la fuente de verdad tenía que ser **la base corriendo** (`SHOW CREATE TABLE` e `information_schema`) y no el diseño. Un subagente limitado a dos carpetas actualizó el DER y el DDL citando el ticket de cada columna. Además informó, sin corregirlas, las contradicciones que encontró: `conversations (tenant_id, user_phone)` no es único, a `notification_logs` le falta un índice que lidere con `tenant_id`, y el C4 dibuja piezas diferidas.
 
 ---
 
 ## 4. Especificación de la API
 
-⚠️ **Pendiente.**
+**Prompt 1: OpenAPI de los endpoints públicos** · [`2026-11-02-especificacion-api.md`](.claude/prompts/aprobados/2026-11-02-especificacion-api.md)
+
+> No hubo un documento de API previo: la especificación se escribió para esta entrega a partir del código. El archivo deja registrado el prompt equivalente.
+
+```markdown
+# Rol
+Actuás como ingeniero backend senior y redactor de contratos de API, con experiencia en OpenAPI 3,
+webhooks de terceros y flujos OAuth 2.0. Documentás lo que el código hace, no lo que el diseño prometía.
+# Objetivo
+Escribir la especificación OpenAPI 3.0 de los endpoints públicos del backend de AgendaLlena [...] con un
+ejemplo de petición y respuesta por endpoint.
+```
+
+*Cómo guié al asistente:* "lo que el código hace, no lo que el diseño prometía". Antes de escribir los códigos de respuesta se verificaron en el código: la firma inválida devuelve `401`, y un `state` inválido de OAuth **no** devuelve `403` sino una redirección `302` al panel con el motivo.
 
 ---
 
@@ -158,4 +248,8 @@ auditando INVEST y partiendo las historias que no cumplen
 
 ## 7. Pull Requests
 
-⚠️ **Pendiente:** hasta ahora no hubo PRs. A partir de esta entrega cada cambio entra por pull request, y acá van los prompts usados para redactarlos o revisarlos.
+**Prompt 1: PR de la entrega 1** · conversación con Claude Code del 2026-11-02 · [PR #1](https://github.com/diegomottadev/agendallenaia/pull/1)
+
+> Pedido original: *"necesito crear una rama en https://github.com/diegomottadev/agendallenaia que sea para la documentacion tecnica donde no vaya el codigo del proyecto si no todo lo de .claude y lo que aun falta para la parte de documentacion tecnica"*, y después *"abrí el PR vos"*.
+
+*Cómo guié al asistente:* la rama sigue la convención de la consigna (`feature-entrega1-DM`). Antes de publicar en un repo público le pedí que revisara que `.claude/` no tuviera secretos. La descripción del PR sigue lo que pide la consigna (qué cambia, por qué, impacto) y suma una checklist de pendientes.

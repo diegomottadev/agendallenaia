@@ -9,7 +9,11 @@
 6. [Tickets de trabajo](#6-tickets-de-trabajo)
 7. [Pull requests](#7-pull-requests)
 
-> **Dónde está cada cosa.** Este README es el resumen que pide la plantilla. La documentación completa vive en [`.claude/docs/`](.claude/docs/README.md): PRD, lean canvas, C4, DER, flujos, 26 historias, 50 tickets, story maps, estimación y decisiones. [`CLAUDE.md`](CLAUDE.md) es el contexto con el que trabajan los agentes de IA del proyecto. El código está en [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena).
+> **Dónde está cada cosa.** Este README es el resumen que pide la plantilla.
+> - **Documentación completa:** [`.claude/docs/`](.claude/docs/README.md). Incluye PRD, lean canvas, C4, DER, flujos, 26 historias, 50 tickets, story maps, estimación y decisiones.
+> - **Prompts:** [`prompts.md`](prompts.md), con los prompts clave de cada sección.
+> - **Contexto de la IA:** [`CLAUDE.md`](CLAUDE.md), el contexto con el que trabajan los agentes del proyecto.
+> - **Código:** [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena).
 
 ---
 
@@ -29,7 +33,9 @@ Middleware de agendamiento por WhatsApp para PyMEs latinoamericanas de 3 a 20 em
 
 ### **0.4. URL del proyecto:**
 
-⚠️ **Pendiente.** Todavía no hay un entorno público desplegado; se publica en la entrega final. Mientras tanto se puede correr en local con Docker (ver [1.4](#14-instrucciones-de-instalación)).
+⚠️ **Todavía sin URL pública.** El despliegue en DigitalOcean está preparado y probado, pero falta crear el droplet y el subdominio (ver [2.4](#24-infraestructura-y-despliegue)).
+
+Mientras tanto, el proyecto corre en local con Docker ([1.4](#14-instrucciones-de-instalación)), y el flujo completo se puede ver en el [video de la sección 1.3](#13-diseño-y-experiencia-de-usuario).
 
 ### 0.5. URL o archivo comprimido del repositorio
 
@@ -50,6 +56,8 @@ Una PyME latinoamericana pierde plata por dos agujeros que nadie mide:
 | **Entre el 20% y el 35% de los turnos no se presentan** | Una silla vacía que ya estaba paga | Nada; nadie llama para confirmar |
 | **Rechaza los CRMs** | Ya les pidieron cambiar de herramienta y no lo hacen | WhatsApp y una planilla |
 
+La tercera fila define el producto: **a una PyME no se le puede pedir que cambie de herramientas.**
+
 **Propuesta de valor:** *agendar el 100% de las consultas de WhatsApp en menos de 15 segundos, sin cambiar de herramientas.*
 
 **Para quién:** PyMEs de 3 a 20 empleados de salud y estética, inmobiliarias, distribuidoras B2B y servicios de mantenimiento.
@@ -60,60 +68,76 @@ Una PyME latinoamericana pierde plata por dos agujeros que nadie mide:
 - Al menos 35% de los chats terminan en reserva.
 - Puesta en marcha de una PyME en menos de 60 minutos.
 
-Modelo de negocio ([lean canvas](.claude/docs/01-producto/01-lean-canvas.md)): SaaS multi-tenant con un setup de USD 100-300 y un abono plano de USD 80-150 por mes.
+**Modelo de negocio** ([lean canvas](.claude/docs/01-producto/01-lean-canvas.md)): SaaS multi-tenant con un setup de USD 100-300 y un abono plano de USD 80-150 por mes.
 
 ### **1.2. Características y funcionalidades principales:**
 
 **Cliente final (por WhatsApp)**
-- **Bienvenida y menú** con botones interactivos de Meta (US-16).
-- **Horarios realmente libres:** se consulta `freeBusy` de Google Calendar y se aplican el horario de atención, la duración del turno y el buffer entre turnos. Se muestran en una lista interactiva con paginado (US-05, US-19).
-- **Reserva consistente:** un hold de 5 minutos en Redis, un control de colisión al confirmar y la creación del evento en Calendar. Dos clientes no pueden quedarse con el mismo horario (US-06, US-18, US-22).
-- **Recordatorio t-24 h** con plantilla aprobada por Meta y botones Confirmar, Re-agendar y Cancelar. Cancelar libera el horario en Calendar (US-10, US-11).
-- **Fallback:** si Google o Meta fallan, el cliente recibe un mensaje de cortesía y la conversación nunca queda colgada (US-09).
-- **Derivación a una persona** a un segundo número atendido por humanos (US-20).
+
+| Funcionalidad | Historia |
+| :-- | :-- |
+| **Bienvenida y menú** con botones interactivos de Meta | US-16 |
+| **Horarios realmente libres:** consulta `freeBusy` de Google Calendar con horario de atención, duración y buffer, y los muestra en una lista interactiva con paginado | US-05, US-19 |
+| **Reserva consistente:** hold de 5 minutos en Redis, control de colisión al confirmar y creación del evento en Calendar. Dos clientes no pueden quedarse con el mismo horario | US-06, US-18, US-22 |
+| **Recordatorio t-24 h** con plantilla aprobada por Meta y botones Confirmar, Re-agendar y Cancelar. Cancelar libera el horario | US-10, US-11 |
+| **Fallback:** si Google o Meta fallan, el cliente recibe un mensaje de cortesía y la conversación nunca queda colgada | US-09 |
+| **Derivación a una persona** en un segundo número atendido por humanos | US-20 |
 
 **Equipo de la PyME (panel web)**
-- Login con roles **dueño, administrador y equipo** y aislamiento estricto entre negocios (US-14).
-- Conversaciones: lista, detalle con el historial completo, y pausar o reactivar el bot (US-21).
-- Configuración de agenda (horarios, duración, buffer) y de mensajes (bienvenida, fallback, sin disponibilidad) (US-15).
-- Registro de asistencia y tasa de ausentismo (US-17).
-- Recordatorios que no salieron, con reintento (US-24).
-- Turnos en duda: una conciliación periódica detecta cuando Google y la base se desincronizaron.
-- Estado de las integraciones: Meta, Google Calendar y Google Sheets (US-25).
-- Vinculación de una planilla de Google Sheets donde se vuelcan los leads (US-13, US-26).
+
+| Funcionalidad | Historia |
+| :-- | :-- |
+| Login con roles **dueño, administrador y equipo**, con aislamiento estricto entre negocios | US-14 |
+| Conversaciones: lista, detalle con historial completo, pausar y reactivar el bot | US-14, US-21 |
+| Configuración de agenda (horarios, duración, buffer) y de mensajes (bienvenida, fallback, sin disponibilidad) | US-15 |
+| Registro de asistencia y tasa de ausentismo | US-17 |
+| Recordatorios que no salieron, con reintento | US-24 |
+| Turnos en duda: una conciliación periódica detecta cuando Google y la base se desincronizaron | US-22 |
+| Estado de las integraciones (Meta, Google Calendar, Google Sheets) | US-25 |
+| Planilla de Google Sheets vinculada, donde se vuelcan los leads hayan reservado o no | US-13, US-26 |
 
 **Plataforma**
 - Webhook de Meta con handshake, firma HMAC y respuesta `200` antes de procesar (US-01, US-02).
-- Máquina de estados declarada: 9 estados con transiciones explícitas, idempotencia y lock por conversación (US-03).
-- Todo se guarda en UTC y se muestra en la zona horaria del negocio, con una suite que detecta reglas de husos derogadas (US-07).
+- Máquina de estados declarada: 9 estados, transiciones explícitas, idempotencia y lock por conversación (US-03).
+- Todo se guarda en UTC y se muestra en la zona del negocio, con una suite que detecta reglas de husos derogadas (US-07).
+- **Simulador para desarrollo:** un chat de WhatsApp en `/dev/whatsapp` más mocks de Meta y de Google Calendar. El flujo completo se puede probar sin teléfono ni cuentas reales, y en producción esas rutas no existen.
 
 **Fuera del MVP**, con la decisión documentada en el [PRD](.claude/docs/01-producto/02-prd.md): cotizador paramétrico, sincronización inversa por *watch* de Google, Outlook, cobro de señas y editor visual de flujos.
 
 ### **1.3. Diseño y experiencia de usuario:**
 
-⚠️ **Pendiente:** capturas del chat y del panel, y un video de 2-3 minutos con el flujo principal. Se agregan con la entrega del código funcional.
+**Video del flujo principal** (18 s): un cliente reserva por WhatsApp y la dueña ve el turno en el panel. Lo grabó el test E2E mientras corría contra el sistema real; solo Meta y Google están simulados.
 
-Mientras tanto, el recorrido está documentado en:
+![Flujo principal](docs/capturas/flujo-principal.gif)
+
+[Descargar en MP4](docs/capturas/flujo-principal.mp4)
+
+**Paso a paso:**
+
+| | |
+| :-: | :-: |
+| **1 · El cliente escribe y el bot da la bienvenida** con botones interactivos | **2 · Da su nombre y recibe solo horarios libres**, en una lista paginada |
+| ![Bienvenida](docs/capturas/01-bienvenida.png) | ![Horarios](docs/capturas/02-horarios.png) |
+| **3 · Elige un horario y el turno queda reservado** (evento creado en Calendar) | **4 · La dueña entra al panel** y ve el estado de sus integraciones |
+| ![Reservado](docs/capturas/03-reservado.png) | ![Panel](docs/capturas/04-panel.png) |
+| **5 · La conversación aparece con su turno** y el enlace al evento en Google Calendar | **6 · El detalle muestra el historial completo**, entrantes y salientes |
+| ![Conversaciones](docs/capturas/05-conversaciones.png) | ![Detalle](docs/capturas/06-detalle-conversacion.png) |
+
+> ⚠️ **Bug conocido, visible en la captura 5:** el panel muestra "Sin nombre". El nombre que da el cliente queda en `context_data` y en el turno (`bookings.client_name`), pero no se copia a `conversations.user_name`, que es lo que lee el listado. Se corrige en la próxima entrega con su test de regresión.
+
+⚠️ **Pendiente:** un video narrado de 2-3 minutos que recorra también el recordatorio t-24 h y la configuración del negocio.
+
+Recorridos documentados:
 - [Flujo de WhatsApp del cliente final](.claude/docs/03-flujos/04-flujo-whatsapp-cliente-final.md)
-- [Estados del flujo conversacional](.claude/docs/03-flujos/05-estados-flujo-conversacional.md)
-- [Secuencia end-to-end de agendamiento](.claude/docs/03-flujos/06-secuencia-agenda-cotizacion-e2e.md)
+- [Máquina de estados](.claude/docs/03-flujos/05-estados-flujo-conversacional.md)
+- [Secuencia end-to-end](.claude/docs/03-flujos/06-secuencia-agenda-cotizacion-e2e.md)
 - Casos de uso: [general](.claude/docs/03-flujos/01-casos-de-uso-general.md), [cliente final](.claude/docs/03-flujos/02-casos-de-uso-cliente-final.md) y [equipo de la PyME](.claude/docs/03-flujos/03-casos-de-uso-equipo-pyme.md)
-
-```mermaid
-flowchart LR
-    A["Cliente escribe<br>por WhatsApp"] --> B["Webhook de Meta<br>200 primero,<br>procesa después"]
-    B --> C["Cola<br>Redis"]
-    C --> D["Máquina de estados<br>9 estados declarados"]
-    D --> E["Horarios libres<br>Google freeBusy"]
-    E --> F["Hold del slot<br>Redis · TTL 5 min"]
-    F --> G["Turno creado<br>Calendar + MySQL"]
-    G --> H["Recordatorio t-24h<br>Confirmar · Re-agendar · Cancelar"]
-    H --> I["Asistencia y<br>tasa de ausentismo"]
-```
 
 ### **1.4. Instrucciones de instalación:**
 
-**Requisitos:** Docker con Docker Compose. Todo lo demás corre en contenedores: PHP 8.4, MySQL 8.4 y Redis 7.
+**Requisitos:** Docker con Docker Compose. Todo lo demás corre en contenedores: PHP 8.4, MySQL 8.4, Redis 7 y, para el E2E, Playwright.
+
+**1. Levantar el proyecto**
 
 ```bash
 git clone https://github.com/diegomottadev/agendallena.git
@@ -123,17 +147,47 @@ cp .env.example .env
 docker compose up -d mysql redis
 docker compose run --rm --no-deps app composer install
 docker compose run --rm --no-deps app php artisan key:generate
-docker compose run --rm --no-deps app sh -c "npm ci && npm run build"
-docker compose up -d                                     # app (:8000) + worker de la cola
-
-docker compose exec app php artisan migrate --seed
-docker compose exec app php artisan db:seed --class=RolesDemoSeeder   # 2 negocios demo, contraseña "password"
+docker run --rm -v "$PWD":/w -w /w node:22.12-bookworm-slim sh -c "npm ci && npm run build"   # assets del panel
 ```
 
-- Panel: http://localhost:8000/login (por ejemplo `duenia@peluqueria-sur.test` / `password`).
-- Tests: `docker compose exec app php artisan test`. La suite corre contra MySQL real, en la base `agendallena_testing`.
-- Para integraciones reales hay que completar en `.env` las credenciales de Meta (`META_*`) y Google (`GOOGLE_*`).
-- ⚠️ El `Dockerfile` usa `opcache.validate_timestamps=0`: el código que se edita no se ve hasta correr `docker compose restart app worker`.
+**2. Activar el simulador**, para probar sin Meta ni Google reales. Agregá al `.env`:
+
+```dotenv
+META_APP_SECRET=dev-secret-local
+META_SIMULADOR=true
+META_GRAPH_URL=http://app:8000/api/dev/meta
+META_SIMULADOR_WEBHOOK_URL=http://app:8000/api/v1/webhooks/whatsapp
+GOOGLE_API_URL=http://app:8000/api/dev/google
+```
+
+**3. Base de datos, datos de demo y servicios**
+
+```bash
+docker compose up -d                                                   # app (:8000) + worker de la cola
+docker compose exec app php artisan migrate --seed
+docker compose exec app php artisan db:seed --class=RolesDemoSeeder    # 2 negocios demo, contraseña "password"
+docker compose exec app php artisan dev:whatsapp:preparar              # WhatsApp y Google Calendar simulados por negocio
+```
+
+**4. Usarlo**
+
+| Qué | Dónde |
+| :-- | :-- |
+| Chat de WhatsApp simulado | http://localhost:8000/dev/whatsapp |
+| Panel | http://localhost:8000/login, con `duenia@peluqueria-sur.test` / `password` |
+| Mensaje desde la terminal | `docker compose exec app php artisan dev:whatsapp "hola"` |
+
+**5. Tests**
+
+```bash
+docker compose exec app php artisan test                     # suite completa, contra MySQL real (base agendallena_testing)
+docker compose --profile e2e run --rm e2e                    # E2E con Playwright (necesita los pasos 2 y 3)
+CAPTURAS=1 docker compose --profile e2e run --rm e2e         # además regenera las capturas de la sección 1.3
+```
+
+**Notas**
+- Con integraciones reales, se completan en `.env` las credenciales `META_*` y `GOOGLE_*` y se quitan las variables del simulador.
+- ⚠️ El `Dockerfile` usa `opcache.validate_timestamps=0`, así que el código editado no se ve hasta correr `docker compose restart app worker`.
 
 ---
 
@@ -141,7 +195,7 @@ docker compose exec app php artisan db:seed --class=RolesDemoSeeder   # 2 negoci
 
 ### **2.1. Diagrama de arquitectura:**
 
-C4 nivel 2, contenedores ([fuente](.claude/docs/02-arquitectura/01-c4-nivel-2-contenedores.md)):
+C4 nivel 2, contenedores:
 
 ```mermaid
 flowchart TB
@@ -181,113 +235,151 @@ flowchart TB
     Scheduler -->|conciliación| GC
 ```
 
-**Patrón:** **monolito modular** en Laravel con **arquitectura orientada a eventos** para la ingesta: el webhook valida, encola y responde `200`, y el procesamiento ocurre en un worker. Las integraciones externas viven detrás de **adapters** (`MetaAdapter`, `GoogleConnection`, Sheets), al estilo puertos y adaptadores. El dominio conversacional es una **máquina de estados declarada** (`TablaDeTransiciones`): una transición que no está en la tabla lanza una excepción, no se improvisa.
+> Este diagrama refleja el sistema construido. Los C4 de [`.claude/docs/02-arquitectura/`](.claude/docs/02-arquitectura/) son los del diseño inicial e incluyen piezas diferidas del MVP: el cotizador, el detector automático de intervención humana y el webhook de *watch* de Google.
+
+**Patrón:** **monolito modular** en Laravel con **ingesta orientada a eventos**: el webhook valida, encola y responde `200`, y el procesamiento ocurre en un worker. Las integraciones externas viven detrás de **adapters** (`MetaAdapter`, `CalendarioDeGoogle`, `PlanillaDeGoogle`), al estilo puertos y adaptadores. El dominio conversacional es una **máquina de estados declarada** (`TablaDeTransiciones`): una transición que no está en la tabla lanza una excepción, no se improvisa.
 
 **Por qué esta arquitectura:**
 - **Meta exige responder rápido** y reintenta lo que no recibe `200`. Encolar desacopla la latencia de Google y de Meta de la respuesta del webhook (RF-A2).
-- **Un solo desarrollador y un MVP:** un monolito con una cola alcanza para los volúmenes de los pilotos y evita la complejidad operativa de los microservicios.
+- **Un desarrollador y un MVP:** un monolito con una cola alcanza para el volumen de los pilotos y evita la operación de microservicios.
 - **Multi-tenant por columna** (`tenant_id` más *Global Scopes* de Eloquent) en lugar de base o schema por cliente. Un solo despliegue sirve a todas las PyMEs con aislamiento lógico (RNF-01).
 
 **Costos aceptados:**
-- Los *Global Scopes* no cubren `DB::table()`, `whereRaw()` ni joins manuales; ahí el filtro va explícito y se revisa en code review (agente `invariantes-auditor`).
+- Los *Global Scopes* no cubren `DB::table()`, `whereRaw()` ni joins manuales; ahí el filtro va explícito y lo revisa el agente `invariantes-auditor`.
 - Los jobs y el scheduler no heredan el tenant: viaja en el payload.
 - Con un solo worker, una ráfaga grande espera en la cola. Escalar es agregar workers.
-- No hay sincronización inversa por *watch* de Google. Una **conciliación periódica** detecta los turnos que se movieron a mano y los marca "en duda" para que una persona los resuelva.
+- No hay sincronización inversa por *watch* de Google. La reemplaza una **conciliación periódica** que marca los turnos movidos a mano como "en duda" para que una persona los resuelva.
 
 ### **2.2. Descripción de componentes principales:**
 
 | Componente | Tecnología | Responsabilidad |
 | :-- | :-- | :-- |
 | **Webhook receiver** (`WhatsAppWebhookController` + `VerifyMetaSignature`) | Laravel 13 | Handshake (`hub.challenge`), validación de la firma `X-Hub-Signature-256` y encolado del payload. Responde `200` sin procesar. |
-| **ProcessMessageJob** | Laravel Queues sobre Redis | Resuelve el tenant por `phone_number_id`, deduplica (`processed_messages`), toma el lock de la conversación y ejecuta la transición. |
-| **Máquina de estados** (`App\Conversacion`) | PHP 8.4 | 9 estados (`IDLE`, `GATHERING_PARAMS`, `SELECTING_SLOT`, `SLOT_SELECTED`, `BOOKED`, `CONFIRMED`, `CANCELLED`, `PAUSED_HUMAN`, `ERROR_FALLBACK`), transiciones declaradas, `state_version` para descartar botones vencidos. |
-| **Disponibilidad y reserva** (`App\Services\Google`) | Google Calendar API | `freeBusy`, grilla de slots con horario, duración y buffer, hold temporal en Redis, colisión al confirmar y creación del evento. |
-| **MetaAdapter** (`App\Meta`) | Meta Cloud API v21.0 | Envío de texto, mensajes interactivos (botones y listas) y plantillas. Persiste lo saliente en `messages`. Distingue el *rate limit*, que se reintenta, del rechazo definitivo. |
-| **Recordatorios** (`App\Recordatorios`) | Scheduler + plantillas de Meta | Recordatorio t-24 h con botones y procesamiento de la respuesta (confirmar, re-agendar, cancelar). |
-| **Leads** (`App\Leads`, `VolcarLeadJob`) | Google Sheets API | Vuelca cada conversación con datos, haya reservado o no, a la planilla del negocio. |
-| **Panel** (`App\Http\Controllers\Panel`) | Blade + Vue 3 + Tailwind 4 (Vite 8) | Login, conversaciones, configuración, asistencia, recordatorios fallidos, turnos en duda y estado de las integraciones. |
+| **ProcessMessageJob** | Laravel Queues | Resuelve el tenant por `phone_number_id`, deduplica (`processed_messages`), toma el lock de la conversación y ejecuta la transición. |
+| **Máquina de estados** (`App\Conversacion`) | PHP 8.4 | 9 estados (`IDLE`, `GATHERING_PARAMS`, `SELECTING_SLOT`, `SLOT_SELECTED`, `BOOKED`, `CONFIRMED`, `CANCELLED`, `PAUSED_HUMAN`, `ERROR_FALLBACK`), transiciones declaradas y `state_version` para descartar botones vencidos. |
+| **Disponibilidad y reserva** (`App\Services\Agenda`, `App\Services\Google`) | Google Calendar API | `freeBusy`, grilla con horario, duración y buffer, hold temporal en Redis, colisión al confirmar y creación idempotente del evento. |
+| **MetaAdapter** (`App\Meta`) | Meta Cloud API v21.0 | Texto, mensajes interactivos (botones y listas) y plantillas. Persiste lo saliente en `messages` y distingue el *rate limit* (se reintenta) del rechazo definitivo. |
+| **Recordatorios** (`App\Recordatorios`) | Scheduler + plantillas de Meta | Recordatorio t-24 h y la respuesta a sus botones (confirmar, re-agendar, cancelar). |
+| **Leads** (`App\Leads`, `VolcarLeadJob`) | Google Sheets API | Vuelca cada conversación con datos a la planilla del negocio. |
+| **Panel** (`App\Http\Controllers\Panel`) | Blade + Vue 3 + Tailwind 4 (Vite 8) | Login, conversaciones, configuración, asistencia, recordatorios fallidos, turnos en duda e integraciones. |
+| **Simulador** (`App\Dev`, `/dev/whatsapp`) | Laravel + JS | Chat de prueba y mocks de Graph API y Calendar. Solo en desarrollo. |
 | **Logging estructurado** (`App\Logging`) | Monolog | Contexto por tenant e integración, y redacción de secretos antes de escribir. |
 
 ### **2.3. Descripción de alto nivel del proyecto y estructura de ficheros**
 
-Estructura estándar de Laravel 13. El dominio se organiza **por capacidad de negocio** y no por tipo técnico:
+Estructura estándar de Laravel 13. El dominio se organiza **por capacidad de negocio**, no por tipo técnico:
 
 ```
 app/
 ├── Conversacion/        # Dominio: máquina de estados, reserva, reagendamiento, fallback, derivación, pausa
-│   └── Interactivo/     #   Renderizado e interpretación de botones y listas de Meta (ids sellados)
-├── Meta/                # Adapter de WhatsApp Cloud API: envío, plantillas, alta de cuenta, normalización de números
-├── Services/Google/     # Adapter de Google: OAuth, renovación de tokens, freeBusy, eventos
+│   └── Interactivo/     #   Botones y listas de Meta: renderizado e interpretación (ids sellados)
+├── Meta/                # Adapter de WhatsApp Cloud API: envío, plantillas, alta de cuenta, números
+├── Services/
+│   ├── Agenda/          # Disponibilidad: freeBusy y grilla de slots
+│   └── Google/          # Adapter de Google: OAuth, renovación de tokens, eventos, Sheets
 ├── Recordatorios/       # Plantilla t-24h y respuesta a sus botones
 ├── Leads/               # Fila de lead para Google Sheets
-├── Panel/               # Lógica de lectura del panel (estado de integraciones, etc.)
+├── Panel/               # Lecturas del panel (estado de integraciones, etc.)
 ├── Jobs/                # ProcessMessageJob (ingesta), VolcarLeadJob
-├── Console/Commands/    # Tareas del scheduler: recordatorios, conciliación, expiración, plantillas
+├── Console/Commands/    # Tareas del scheduler y comandos del simulador
+├── Dev/                 # Simulador de Meta (solo desarrollo)
 ├── Http/
-│   ├── Controllers/Api/   # Webhook de Meta y callback OAuth de Google
+│   ├── Controllers/Api/   # Webhook de Meta y OAuth de Google
 │   ├── Controllers/Panel/ # Pantallas del panel
-│   └── Middleware/        # Firma de Meta, tenant de la sesión, roles
+│   ├── Controllers/Dev/   # Chat simulado y mocks de Meta y Google
+│   └── Middleware/        # Firma de Meta, tenant de la sesión, roles, SoloConSimulador
 ├── Models/              # Eloquent; BelongsToTenant aplica el Global Scope por tenant_id
 ├── Logging/             # Logging estructurado y redacción de secretos
-└── Support/             # TenantContext, HoraLocal (conversión UTC ↔ zona del negocio)
-database/migrations/     # Esquema (índices compuestos que lideran con tenant_id)
+└── Support/             # TenantContext, HoraLocal (UTC ↔ zona del negocio)
+database/migrations/     # Esquema: índices compuestos que lideran con tenant_id
 resources/views, js/     # Panel: Blade + componentes Vue 3
 tests/Feature/           # Suite de comportamiento contra MySQL real
-.claude/                 # Documentación de producto, agentes, skills y prompts (este repo)
+e2e/                     # Playwright: E2E del flujo principal y capturas
+docker/prod/             # Imagen de producción (FrankenPHP)
+docs/despliegue.md       # Guía de despliegue en DigitalOcean
+.claude/                 # Documentación de producto, agentes, skills y prompts
 ```
 
 ### **2.4. Infraestructura y despliegue**
 
-**Local y CI.** `docker-compose.yml` levanta 4 servicios:
+**Desarrollo y CI.** `docker-compose.yml` levanta `app` (`artisan serve`), `worker` (`queue:work`), `mysql:8.4`, `redis:7-alpine` y, bajo el perfil `e2e`, Playwright. En GitHub Actions (`.github/workflows/tests.yml`), cada push y PR corre dos jobs:
+1. **Suite completa** dentro de la imagen del proyecto, para que los tests de husos usen la misma tzdata que producción, más un paso aparte para los husos horarios.
+2. **E2E con Playwright** con el simulador encendido. Guarda el reporte, el video y las trazas como artefactos.
+
+**Producción: preparada, sin desplegar.** Un droplet de DigitalOcean con Docker:
 
 ```mermaid
 flowchart LR
-    subgraph compose["docker compose"]
-        app["app<br>php artisan serve :8000"]
-        worker["worker<br>php artisan queue:work"]
-        mysql[("mysql:8.4")]
-        redis[("redis:7-alpine")]
+    subgraph GH["GitHub"]
+        Repo["Repo agendallena"] -->|push a main| CI["Actions: tests + E2E"]
+        CI -->|verde| CD["Actions: deploy"]
+        CD -->|build + push| GHCR[("GHCR")]
     end
-    app --> mysql & redis
-    worker --> mysql & redis
+
+    subgraph DO["Droplet DigitalOcean · /opt/agendallena"]
+        Web["web<br>FrankenPHP + Caddy<br>HTTPS Let's Encrypt"]
+        Worker["worker<br>queue:work"]
+        Sched["scheduler<br>schedule:work"]
+        MySQL[("mysql:8.4")]
+        Redis[("redis:7")]
+    end
+
+    Meta["Meta Cloud API"] -->|webhook HTTPS| Web
+    Usuario["Equipo PyME"] -->|HTTPS| Web
+    Web & Worker & Sched --> MySQL & Redis
+    Worker & Sched --> Meta & Google["Google APIs"]
+    CD -->|SSH: pull + up + migrate| DO
+    GHCR -->|docker pull| DO
 ```
 
-- La imagen se construye desde un `Dockerfile` propio (PHP 8.4 CLI con `pdo_mysql`, `redis`, `bcmath`, `intl` y `opcache`). **La versión de tzdata es parte del contrato** porque los husos de la región cambian por decreto (T-031).
-- **CI con GitHub Actions** (`.github/workflows/tests.yml`): en cada push y PR construye la imagen del proyecto, levanta MySQL y Redis y corre la suite completa. Se usa la imagen del proyecto, y no `setup-php`, para que los tests de husos corran con la misma tzdata que producción.
-- **Secretos:** solo en `.env`, que no se versiona. Los tokens OAuth de cada PyME se guardan **encriptados** en la tabla `integrations`, nunca en variables de entorno.
+- **Imagen** (`docker/prod/Dockerfile`, multi-stage): assets con Node, vendor sin dependencias de desarrollo y runtime **FrankenPHP 1.11**, que es PHP 8.4 con Caddy y da HTTPS automático (Meta lo exige para el webhook). Incluye `timezonedb` para tener la **tzdata 2026.6**: la versión que trae la imagen base es vieja y aplicaría reglas de husos derogadas.
+- **Servicios** (`docker-compose.prod.yml`): `web`, `worker` y `scheduler` sobre la misma imagen, más `mysql` y `redis` con volúmenes persistentes.
+- **CD** (`.github/workflows/deploy.yml`): después de que `tests` termina en verde sobre `main`, construye la imagen, la publica en GHCR y despliega por SSH (`pull`, `up -d`, `migrate --force`, `queue:restart`). **Está apagado** hasta que la variable `DEPLOY_ENABLED` valga `true`.
+- **Secretos:** `.env` en el servidor con `chmod 600`; credenciales SSH en *GitHub Secrets*; tokens OAuth de cada PyME encriptados en la base. `.dockerignore` excluye todo `.env*`, y se verificó que la imagen no lo contiene.
+- **Verificado en local:** la imagen construye, sirve el panel y los assets, y `/dev/whatsapp` devuelve `404` en producción.
 
-⚠️ **Pendiente para la entrega final:**
-- **Despliegue en un entorno público** (VPS de USD 20-40 por mes según el lean canvas) con php-fpm detrás de nginx, el worker y el scheduler como procesos supervisados, y HTTPS (Meta exige HTTPS para el webhook).
-- **Pipeline de CD** y gestión de secretos en ese entorno.
-- **Diagrama de despliegue** de producción.
+Guía paso a paso (droplet, DNS, usuario de deploy, secretos, Meta y Google): [`docs/despliegue.md`](docs/despliegue.md).
+
+⚠️ **Pendiente:** crear el droplet y el subdominio y encender el CD. Después, sumar backups automáticos de la base y alertas de worker y scheduler.
 
 ### **2.5. Seguridad**
 
-- **Firma de los webhooks:** todo `POST` de Meta se valida con HMAC SHA-256 (`X-Hub-Signature-256`) sobre el cuerpo crudo, en middleware y antes de tocar código de aplicación. Una firma ausente o inválida devuelve `401`.
-- **Handshake por tenant:** el `verify_token` se busca entre las integraciones de cada PyME con comparación en tiempo constante (`hash_equals`). El token de un tenant no valida a otro.
-- **Tokens encriptados en reposo:** `access_token`, `refresh_token` y `settings` de `integrations` usan el cast `encrypted` y están ocultos en la serialización (`$hidden`).
-- **Aislamiento multi-tenant:** el trait `BelongsToTenant` aplica un *Global Scope* y falla si no hay tenant activo. Cruzar tenants exige escribir `withoutTenantScope()` a propósito. Hay tests que verifican que un tenant no ve datos de otro.
-- **Roles en el panel:** dueño, administrador y equipo, aplicados con el middleware `rol:*` ([roles y permisos](.claude/docs/01-producto/05-roles-y-permisos.md)).
-- **Redacción de secretos en los logs:** el procesador `RedactSecrets` elimina tokens y secretos antes de escribir. Los mensajes de error nombran al tenant y al código HTTP, nunca al token.
-- **OAuth con `state` firmado** en el callback de Google, que además transporta el tenant.
-- **CSRF y sesión** en el panel. Los webhooks van en el grupo `api`, sin sesión, y su autenticación es la firma.
-- **Ids de botones sellados** (`IdSellado`): un botón de un mensaje viejo o manipulado no ejecuta una acción fuera de su estado.
+| Práctica | Cómo está implementada |
+| :-- | :-- |
+| **Firma de los webhooks** | Todo `POST` de Meta se valida con HMAC SHA-256 (`X-Hub-Signature-256`) sobre el cuerpo crudo, en middleware y antes de tocar código de aplicación. Firma ausente o inválida → `401`. |
+| **Handshake por tenant** | El `verify_token` se compara con `hash_equals` (tiempo constante) contra las integraciones de cada PyME. El token de un tenant no valida a otro. |
+| **Tokens encriptados en reposo** | `access_token`, `refresh_token` y `settings` de `integrations` usan el cast `encrypted` y están en `$hidden`. |
+| **Aislamiento multi-tenant** | El trait `BelongsToTenant` aplica un *Global Scope* y falla si no hay tenant activo. Cruzar tenants exige escribir `withoutTenantScope()` a propósito. Hay tests que verifican que un tenant no ve datos de otro. |
+| **Roles en el panel** | Dueño, administrador y equipo, con el middleware `rol:*` ([roles y permisos](.claude/docs/01-producto/05-roles-y-permisos.md)). |
+| **Secretos fuera de los logs** | El procesador `RedactSecrets` limpia tokens antes de escribir. Los errores nombran al tenant y al código HTTP, nunca al token. |
+| **OAuth con `state` firmado** | El callback de Google valida el `state`, que además transporta el tenant. |
+| **CSRF y sesión** | Activos en el panel. Los webhooks van en el grupo `api`, sin sesión: su autenticación es la firma. |
+| **Ids de botones sellados** | `IdSellado`: un botón viejo o manipulado no ejecuta una acción fuera de su estado. |
+| **Simulador cerrado en producción** | `SoloConSimulador` devuelve `404` en `/dev/*` con `APP_ENV=production`, aunque `META_SIMULADOR` quede encendido: un endpoint que firma webhooks no puede estar expuesto. |
+| **Imagen sin secretos** | `.dockerignore` excluye `.env*`. En producción, `APP_DEBUG=false`, `expose_php=0` y cookies `secure`. |
 
 ### **2.6. Tests**
 
-Más de **600 tests de comportamiento** (`tests/Feature/`) que corren **contra MySQL 8.4 real** y no contra SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. El proyecto se desarrolló con **TDD estricto**: agentes `tdd-test-writer`, `tdd-implementer` y `tdd-refactorer`, cada uno limitado a su fase. Algunos ejemplos:
+| Nivel | Herramienta | Qué cubre |
+| :-- | :-- | :-- |
+| **Comportamiento e integración** | PHPUnit 12, **más de 600 tests** en `tests/Feature/` | Corren **contra MySQL 8.4 real**, no SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. Google y Meta se simulan con `Http::fake`. |
+| **E2E** | **Playwright** (`e2e/`) | El flujo principal en un navegador real: reserva por WhatsApp y verificación en el panel. |
+| **CI** | GitHub Actions | Los dos niveles en cada push y PR. |
+
+El proyecto se desarrolló con **TDD estricto**, con agentes separados por fase: `tdd-test-writer` escribe el test que falla, `tdd-implementer` lo hace pasar y `tdd-refactorer` limpia.
+
+Algunos tests representativos:
 
 | Test | Qué garantiza |
 | :-- | :-- |
-| `FlujoReservaTest` | Recorrido E2E del bot: saludo, botón "Reservar", nombre, lista de horarios libres, reserva. Google y Meta están simulados con `Http::fake`. |
+| `e2e/tests/reserva-por-whatsapp.spec.ts` | **E2E:** el cliente saluda, toca "Reservar", da su nombre, elige un horario libre y recibe la confirmación. Después la dueña inicia sesión y ve la conversación con el turno y el enlace a Calendar. |
+| `FlujoReservaTest` | El recorrido del bot a nivel HTTP, con Google y Meta simulados. |
 | `ColisionDeHorarioTest` / `IdempotenciaDelAgendamientoTest` | Dos clientes no se quedan con el mismo horario, y un webhook repetido no reserva dos veces. |
-| `ZonasHorariasTransversalTest` | Conversiones UTC ↔ zona local correctas, incluidos países que eliminaron el horario de verano. Falla si la imagen retrocede de versión de tzdata. |
-| `WhatsAppWebhookIngestionTest` / `WhatsAppWebhookVerificationTest` | Firma inválida → 401. Handshake con un token de otro tenant → 403. |
-| `RecordatorioT24hTest` / `RespuestaAlRecordatorioT24hTest` | Envío en ventana sin duplicados. Confirmar pasa el turno a `confirmed`, cancelar libera el evento. |
-| `FallbackTest` / `FallbackTercerosTest` | Ante la caída de Google o Meta, el cliente recibe el mensaje de cortesía y la conversación vuelve a `IDLE`. |
-| `RolesYPermisosTest` / `ConsultasNMas1Test` | Permisos por rol y ausencia de consultas N+1 en el panel. |
-
-⚠️ **Pendiente:** un test E2E de navegador del panel (la consigna pide al menos un E2E del flujo principal; hoy el E2E es del bot a nivel HTTP).
+| `ZonasHorariasTransversalTest` | Conversiones UTC ↔ zona local, incluidos países que eliminaron el horario de verano. Falla si la imagen retrocede de tzdata. |
+| `WhatsAppWebhookIngestionTest` / `WhatsAppWebhookVerificationTest` | Firma inválida → `401`. Handshake con el token de otro tenant → `403`. |
+| `RecordatorioT24hTest` / `RespuestaAlRecordatorioT24hTest` | Envío en ventana y sin duplicados. Confirmar pasa el turno a `confirmed`, cancelar libera el evento. |
+| `FallbackTest` / `FallbackTercerosTest` | Si cae Google o Meta, el cliente recibe el mensaje de cortesía y la conversación vuelve a `IDLE`. |
+| `SimuladorDeWhatsAppTest` | El webhook simulado pasa la firma real. Los mocks solo existen en desarrollo, y un turno reservado queda ocupado en el Calendar simulado. |
 
 ---
 
@@ -295,7 +387,7 @@ Más de **600 tests de comportamiento** (`tests/Feature/`) que corren **contra M
 
 ### **3.1. Diagrama del modelo de datos:**
 
-Esquema real de la base (migraciones al día). Las tablas de infraestructura de Laravel (`jobs`, `cache`, `sessions`, etc.) no se muestran.
+Esquema real de la base, con todas las migraciones aplicadas. No se muestran las tablas de infraestructura de Laravel (`jobs`, `cache`, `sessions`, etc.).
 
 ```mermaid
 erDiagram
@@ -438,30 +530,34 @@ erDiagram
 ### **3.2. Descripción de entidades principales:**
 
 Dos reglas valen para todas las tablas:
-- **Multi-tenancy (RNF-01):** todas las tablas de negocio llevan `tenant_id` (FK a `tenants.id`, `NOT NULL` salvo en `users`), y **todo índice compuesto lidera con `tenant_id`**.
+- **Multi-tenancy (RNF-01):** las tablas de negocio llevan `tenant_id` (FK a `tenants.id`, `NOT NULL` salvo en `users`), y los índices compuestos lideran con `tenant_id`.
 - **Zonas horarias (RNF-02):** toda fecha se guarda en **UTC**. La zona del negocio vive en `tenants.timezone` y se aplica solo al mostrar.
 
 | Entidad | Descripción | Relaciones y restricciones clave |
 | :-- | :-- | :-- |
 | **tenants** | Cada PyME cliente. PK UUID. | `slug` único. Tiene 1 `business_settings` y como mucho 1 `lead_spreadsheets`. |
 | **users** | Personas del panel con rol `owner`, `admin` o `staff`. | N:1 con `tenants`. `UNIQUE(tenant_id, email)`: el mismo email puede existir en dos negocios. |
-| **integrations** | Conexiones con Meta, Google Calendar y Google Sheets. `account_identifier` es el `phone_number_id` de Meta o el email de Google. | `UNIQUE(provider, account_identifier)`: un número de WhatsApp pertenece a un solo negocio, y así la ingesta resuelve el tenant. Tokens y `settings` encriptados. |
-| **business_settings** | Reglas del negocio: horario por día (JSON), duración del turno, buffer, ventana de búsqueda, textos del bot y segundo número humano. | 1:1 con `tenants` (`tenant_id` único). |
+| **integrations** | Conexiones con Meta, Google Calendar y Google Sheets. `account_identifier` es el `phone_number_id` de Meta o el email de Google. | `UNIQUE(provider, account_identifier)`: un número pertenece a un solo negocio, y así la ingesta resuelve el tenant. Tokens y `settings` encriptados. |
+| **business_settings** | Reglas del negocio: horario por día (JSON), duración del turno, buffer, ventana de búsqueda, textos del bot y segundo número humano. | 1:1 con `tenants`. |
 | **lead_spreadsheets** | Planilla de Google Sheets donde se vuelcan los leads. | 1:1 con `tenants`. `spreadsheet_id` único. |
-| **conversations** | Estado de la charla con cada cliente final: `current_state` de la máquina de estados, `context_data` con lo capturado, `state_version` para descartar botones vencidos y marcas de derivación. | N:1 con `tenants`. Índice `(tenant_id, user_phone)`. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
-| **messages** | Historial completo de entrantes y salientes, con el payload original de Meta. | N:1 con `conversations`. `UNIQUE(tenant_id, whatsapp_message_id)`. Índice `(tenant_id, conversation_id, created_at)` para el detalle del panel. |
-| **processed_messages** | Ids de mensajes de Meta ya procesados: idempotencia ante los reintentos del webhook. | `UNIQUE(tenant_id, message_id)`. |
-| **bookings** | Turno reservado y sincronizado con un evento de Google Calendar. | N:1 con `conversations` (nullable) y con `integrations`. `live_event_id` es una **columna generada** que vale `external_event_id` solo si el turno está vivo; su `UNIQUE(tenant_id, live_event_id)` impide dos turnos vivos sobre el mismo evento sin bloquear los cancelados. `attendance` se guarda aparte de `status` para no perder que un turno confirmado terminó en ausencia. |
-| **notification_logs** | Auditoría de los recordatorios y confirmaciones enviados, con su estado de entrega según Meta. | N:1 con `bookings`. `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. |
-| **reconciliation_findings** | Desincronizaciones detectadas entre Google y la base ("turnos en duda") y cómo se resolvieron. | N:1 con `bookings`. `resolved_by` es FK a `users`. `UNIQUE(tenant_id, type, booking_id)`. |
+| **conversations** | La charla con cada cliente final: `current_state`, lo capturado en `context_data`, `state_version` para botones vencidos y marcas de derivación. | N:1 con `tenants`. Índice `(tenant_id, user_phone)`. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
+| **messages** | Historial completo de entrantes y salientes, con el payload original de Meta. | N:1 con `conversations`. `UNIQUE(tenant_id, whatsapp_message_id)`. Índice `(tenant_id, conversation_id, created_at)`. |
+| **processed_messages** | Ids de Meta ya procesados: idempotencia ante los reintentos del webhook. | `UNIQUE(tenant_id, message_id)`. |
+| **bookings** | Turno reservado y sincronizado con un evento de Google Calendar. | `live_event_id` es una **columna generada** que vale `external_event_id` solo si el turno está vivo. Su `UNIQUE(tenant_id, live_event_id)` impide dos turnos vivos sobre el mismo evento sin bloquear los cancelados. `attendance` va aparte de `status` para no perder que un turno confirmado terminó en ausencia. |
+| **notification_logs** | Auditoría de recordatorios y confirmaciones, con el estado de entrega que informa Meta. | `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. |
+| **reconciliation_findings** | Desincronizaciones entre Google y la base ("turnos en duda") y su resolución. | N:1 con `bookings`. `resolved_by` es FK a `users`. `UNIQUE(tenant_id, type, booking_id)`. |
 
-Detalle completo, con el DDL, en [`04-modelo-de-datos.md`](.claude/docs/02-arquitectura/04-modelo-de-datos.md). ⚠️ Ese documento y el [DER original](.claude/docs/02-arquitectura/03-der-entidad-relacion.md) son anteriores a varias migraciones (`messages`, `business_settings`, `lead_spreadsheets`, `processed_messages`, `reconciliation_findings`, asistencia). El diagrama de arriba es el vigente.
+DDL completo y justificación de cada índice: [`04-modelo-de-datos.md`](.claude/docs/02-arquitectura/04-modelo-de-datos.md) (actualizado al esquema real el 2026-11-02).
+
+**Deuda detectada al actualizarlo:**
+- `conversations (tenant_id, user_phone)` no es único: dos primeros mensajes en ráfaga de un número nuevo podrían crear dos conversaciones.
+- `notification_logs` no tiene un índice que lidere con `tenant_id`.
 
 ---
 
 ## 4. Especificación de la API
 
-El backend expone pocos endpoints públicos: el resto es el panel, renderizado del lado del servidor con sesión. Los tres principales:
+El backend expone pocos endpoints públicos; el resto es el panel, renderizado del lado del servidor con sesión. Los tres principales:
 
 ```yaml
 openapi: 3.0.3
@@ -516,7 +612,7 @@ paths:
                             type: interactive
                             interactive:
                               type: list_reply
-                              list_reply: { id: "slot|SELECTING_SLOT|3|...", title: "Lun 10:00" }
+                              list_reply: { id: "slot_1793707200|SELECTING_SLOT|4", title: "09:00 hs" }
       responses:
         '200': { description: Recibido y encolado (también ante un cuerpo no decodificable, para que Meta no reintente). }
         '401': { description: Firma ausente o inválida. }
@@ -543,7 +639,7 @@ paths:
 
 ## 5. Historias de Usuario
 
-El backlog completo son **26 historias** en formato Como/Quiero/Para, con criterios BDD, requisitos técnicos, estimación, evaluación INVEST y trazabilidad al PRD ([índice](.claude/docs/01-producto/03-user-stories-mvp.md) · [story maps](.claude/docs/stories-maps/README.md)). Estas son tres de las principales:
+El backlog completo son **26 historias** en formato Como/Quiero/Para, con criterios BDD, requisitos técnicos, estimación, evaluación INVEST y trazabilidad al PRD ([índice](.claude/docs/01-producto/03-user-stories-mvp.md) · [story maps](.claude/docs/stories-maps/README.md)). Tres de las principales:
 
 **Historia de Usuario 1 · [US-03 · Máquina de estados conversacional](.claude/docs/stories/US-03-maquina-de-estados-conversacional.md)**
 
@@ -596,7 +692,7 @@ INVEST: 2 de 6. Fallaba *Pequeña* porque mezclaba tres preocupaciones, y se par
 
 ## 6. Tickets de Trabajo
 
-Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INVEST, con story points, dependencias, sprint y clasificación Pareto (núcleo o diferido) ([índice](.claude/docs/tickets/README.md) · [tabla maestra](.claude/docs/estimacion-backlog/01-tabla-maestra-de-tickets.md) · [análisis Pareto](.claude/docs/estimacion-backlog/03-analisis-pareto.md)). Uno de backend, uno de frontend y uno de base de datos:
+Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INVEST. Cada uno tiene story points, dependencias, sprint y clasificación Pareto (núcleo o diferido) ([índice](.claude/docs/tickets/README.md) · [tabla maestra](.claude/docs/estimacion-backlog/01-tabla-maestra-de-tickets.md) · [análisis Pareto](.claude/docs/estimacion-backlog/03-analisis-pareto.md)). Uno de backend, uno de frontend y uno de base de datos:
 
 **Ticket 1 · Backend · [T-022 · Consulta de disponibilidad: `freeBusy` y grilla de slots](.claude/docs/tickets/Finish/022-consulta-de-disponibilidad.md)**
 
@@ -672,10 +768,12 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 
 ## 7. Pull Requests
 
-⚠️ **Pendiente.** El desarrollo hasta ahora se hizo con commits directos sobre `main` del repositorio de código. A partir de esta entrega todo cambio entra por pull request, y acá se documentan tres:
+**Pull Request 1 · [#1 Entrega 1: documentación técnica de AgendaLlena](https://github.com/diegomottadev/agendallenaia/pull/1)** (`feature-entrega1-DM` → `main`)
 
-**Pull Request 1** · `feature-entrega1-DM`: documentación técnica (esta entrega).
+- **Qué cambia:** completa la plantilla (`readme.md` y `prompts.md`) y publica la documentación de producto de `.claude/` y el `CLAUDE.md`. Suma capturas y video del flujo principal, tomados del E2E.
+- **Por qué:** la entrega 1 pide la idea, la estructura y el diseño. El proyecto se construyó spec-first (PRD → story maps → historias → tickets → tests → código), así que la documentación ya existía; el PR la publica en el formato de la plantilla.
+- **Impacto:** solo documentación. Los prompts que no se habían guardado se reconstruyeron y están marcados como tales.
 
-**Pull Request 2** · *(entrega 2: código funcional)*
+**Pull Request 2** · ⚠️ *Entrega 2:* el simulador de WhatsApp y Google, el E2E con Playwright y el despliegue preparado ya están en la rama `feature/simulador-e2e-despliegue` del repo de código. El PR se documenta acá cuando se abra.
 
-**Pull Request 3** · *(entrega final)*
+**Pull Request 3** · ⚠️ *Entrega final.*
