@@ -2,7 +2,7 @@ flowchart TB
     subgraph Row1[" "]
         direction LR
         P["<b>1. PROBLEMA</b><br>• Ventas perdidas por demora<br>• Alto ausentismo (20-35%)<br>• Rechazo a CRMs complejos<br><br><b>Alternativas:</b><br>• WhatsApp manual / Excel"]
-        S["<b>4. SOLUCIÓN</b><br>• Engine Laravel + Webhooks<br>• Sync OAuth Google/Outlook<br>• Confirmación t-24h<br>• Volcado a Google Sheets"]
+        S["<b>4. SOLUCIÓN</b><br>• Engine Laravel + Webhooks<br>• Sync OAuth Google Calendar<br>(Outlook fuera del MVP)<br>• Confirmación t-24h<br>• Volcado a Google Sheets"]
         UVP["<b>3. PROPUESTA ÚNICA DE VALOR</b><br>'Cotizá y agendá el 100%<br>en menos de 15 segundos<br>sin cambiar herramientas'"]
         UA["<b>9. VENTAJA INJUSTA</b><br>• Stack Senior (Laravel/Vue)<br>• Cero costo por usuario<br>• Venta directa Senior-a-Dueño"]
         CS["<b>2. SEGMENTOS DE CLIENTES</b><br>PyMEs (3-20 empl) LatAm:<br>• Salud y Estética<br>• Inmobiliarias<br>• Distribuidoras B2B<br>• Servicios / Mantenimiento"]

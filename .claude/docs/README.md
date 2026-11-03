@@ -11,7 +11,7 @@ Qué construimos y por qué. Empezá acá.
 | :-- | :-- |
 | [01-lean-canvas.md](01-producto/01-lean-canvas.md) | Problema, segmentos, propuesta de valor, costos e ingresos |
 | [02-prd.md](01-producto/02-prd.md) | Alcance del MVP, KPIs, requisitos funcionales (RF-*), NFR (RNF-*) y criterios de aceptación (CA-*) |
-| [03-user-stories-mvp.md](01-producto/03-user-stories-mvp.md) | Índice del backlog: 14 historias priorizadas por riesgo, con estimación, INVEST y trazabilidad al PRD |
+| [03-user-stories-mvp.md](01-producto/03-user-stories-mvp.md) | Índice **original** del backlog: las primeras 14 historias priorizadas por riesgo, con estimación, INVEST y trazabilidad al PRD. El backlog vigente son las 26 de [stories/](stories/) |
 | [04-user-story-map.md](01-producto/04-user-story-map.md) | Mapa por recorrido de usuario, corte MVP vs. v2 y los 6 huecos de cobertura detectados |
 
 ### 02 — Arquitectura
@@ -41,8 +41,9 @@ El detalle historia por historia y el cruce contra todo lo anterior.
 
 | Doc | Contenido |
 | :-- | :-- |
-| [stories/](stories/) | Las 17 historias del MVP, una por archivo, con criterios BDD, INVEST y notas Lean |
+| [stories/](stories/) | Las **26** historias del MVP (US-01 a US-26), una por archivo, con criterios BDD, INVEST y notas Lean. Las 17 originales más 9 que salieron de los huecos del story map |
 | [stories-maps/](stories-maps/README.md) | Story maps por recorrido (cliente final, PyME, plataforma), corte por slices, 21 huecos y matriz de trazabilidad |
+| [90-archivo-original/](90-archivo-original/) | ⚠️ Versiones originales de casos de uso, estados, secuencia, DER y modelo de datos. **No usar como referencia**: las vigentes están en `02-arquitectura/` y `03-flujos/` |
 
 ## Convención de nombres
 
