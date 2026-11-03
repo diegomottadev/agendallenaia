@@ -123,7 +123,7 @@ La tercera fila define el producto: **a una PyME no se le puede pedir que cambie
 | **5 · La conversación aparece con su turno** y el enlace al evento en Google Calendar | **6 · El detalle muestra el historial completo**, entrantes y salientes |
 | ![Conversaciones](docs/capturas/05-conversaciones.png) | ![Detalle](docs/capturas/06-detalle-conversacion.png) |
 
-> ⚠️ **Bug conocido, visible en la captura 5:** el panel muestra "Sin nombre". El nombre que da el cliente queda en `context_data` y en el turno (`bookings.client_name`), pero no se copia a `conversations.user_name`, que es lo que lee el listado. Se corrige en la próxima entrega con su test de regresión.
+> ✅ **Corregido en la entrega 2:** el panel mostraba «Sin nombre» porque el nombre del cliente quedaba en `context_data` y en el turno, pero no en `conversations.user_name`, que es lo que lee el listado. Lo encontró el E2E y se corrigió con su test de regresión primero. En la captura 5, las filas con nombre son de después del arreglo; las «Sin nombre» se crearon antes y no se rellenaron.
 
 ⚠️ **Pendiente:** un video narrado de 2-3 minutos que recorra también el recordatorio t-24 h y la configuración del negocio.
 
