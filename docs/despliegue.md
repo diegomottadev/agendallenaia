@@ -1,11 +1,11 @@
 # Despliegue en producción
 
-> **Estado:** preparado, sin desplegar. Falta crear el droplet y el subdominio.
-> Todo lo de abajo está listo para cuando existan.
+> **Estado:** preparado, sin desplegar. Falta crear la cuenta de DigitalOcean y el subdominio.
+> La infraestructura está escrita en Terraform (`infra/terraform`) y el CD en GitHub Actions; los dos están apagados hasta que existan.
 
-## Arquitectura de producción
+## Arquitectura
 
-Un solo droplet de DigitalOcean con Docker. La misma imagen corre los tres procesos de la app, y MySQL y Redis viven en el mismo servidor.
+Un droplet de DigitalOcean con Docker, aprovisionado con Terraform. Corre la misma imagen en tres procesos (web, worker y scheduler), con MySQL y Redis en el mismo servidor. **Los datos viven en un Volume aparte**, así que recrear el droplet no toca la base.
 
 ```mermaid
 flowchart LR
@@ -13,84 +13,174 @@ flowchart LR
         Cliente["Cliente final<br>(WhatsApp)"]
         Duenio["Equipo PyME<br>(navegador)"]
         Meta["Meta Cloud API"]
-        Google["Google Calendar / Sheets"]
+        Google["Google Calendar"]
     end
 
     subgraph GH["GitHub"]
-        Repo["Repo agendallenaia"] -->|push a main| CI["Actions: tests + E2E"]
-        CI -->|verde| CD["Actions: deploy"]
-        CD -->|build + push| GHCR[("GHCR<br>ghcr.io/diegomottadev/agendallenaia")]
+        Repo["Repo"] -->|push / PR| CI["tests + seguridad<br>(PHPUnit, E2E, audits, gitleaks, Trivy)"]
+        Repo -->|PR en infra/| IAC["infra: fmt · validate · tflint · Trivy"]
+        IAC -->|manual + aprobación| TF["terraform plan → apply"]
+        CI -->|verde en main| CD["deploy: build · Trivy · GHCR<br>aprobación manual"]
     end
 
-    subgraph DO["Droplet DigitalOcean · Ubuntu 24.04 · /opt/agendallena"]
-        Web["web<br>FrankenPHP + Caddy<br>:80 / :443 (Let's Encrypt)"]
-        Worker["worker<br>queue:work"]
-        Sched["scheduler<br>schedule:work"]
-        MySQL[("mysql:8.4")]
-        Redis[("redis:7")]
-        Env[".env (chmod 600)"]
+    subgraph DO["DigitalOcean · nyc3"]
+        FW["Cloud Firewall<br>22: solo admin + runner temporal<br>80/443: público"]
+        subgraph Droplet["Droplet Ubuntu 24.04 · 2 GB"]
+            Web["web<br>FrankenPHP + Caddy (HTTPS)"]
+            Worker["worker"]
+            Sched["scheduler"]
+            MySQL[("mysql 8.4")]
+            Redis[("redis 7")]
+        end
+        Vol[("Volume /mnt/datos<br>mysql · storage · certificados · dumps")]
+        RIP["IP reservada"]
+        Mon["Monitoring + Uptime<br>alertas por email"]
+        Spaces[("Spaces<br>estado de Terraform<br>+ dumps (opcional)")]
     end
 
-    Cliente --> Meta -->|webhook HTTPS firmado| Web
-    Duenio -->|HTTPS| Web
+    Cliente --> Meta -->|webhook HTTPS firmado| RIP
+    Duenio -->|HTTPS| RIP
+    RIP --> FW --> Web
     Web & Worker & Sched --> MySQL & Redis
-    Worker & Sched -->|API| Meta
-    Worker & Sched -->|API| Google
-    CD -->|SSH: pull + up + migrate| DO
-    GHCR -->|docker pull| DO
+    MySQL & Redis --- Vol
+    Worker & Sched --> Meta & Google
+    TF -->|API| DO
+    CD -->|SSH con huella fijada| Droplet
+    Mon -.-> Droplet
 ```
 
 | Pieza | Archivo | Qué hace |
 | :-- | :-- | :-- |
-| Imagen | [`docker/prod/Dockerfile`](../docker/prod/Dockerfile) | Multi-stage: assets con Node, vendor sin dev, runtime FrankenPHP 1.11 con PHP 8.4 y `timezonedb` (tzdata al día, T-031). |
-| Arranque | [`docker/prod/entrypoint.sh`](../docker/prod/entrypoint.sh) | Cachea config, rutas y vistas con el `.env` ya montado. |
-| Servicios | [`docker-compose.prod.yml`](../docker-compose.prod.yml) | `web`, `worker`, `scheduler`, `mysql` y `redis`, con volúmenes persistentes. |
-| CD | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) | Tras `tests` en verde sobre `main`: build, push a GHCR, SSH al droplet, `pull`, `up -d`, `migrate --force` y `queue:restart`. |
-| Variables | [`.env.production.example`](../.env.production.example) | Plantilla del `.env` del servidor. |
+| Infraestructura | [`infra/terraform/`](../infra/terraform) | Droplet, Volume, IP reservada, VPC, firewall, DNS opcional, alertas, chequeo de disponibilidad y bucket de backups. |
+| Aprovisionamiento | [`cloud-init.yaml.tftpl`](../infra/terraform/cloud-init.yaml.tftpl) | Usuarios `admin` y `deploy`, SSH endurecido, fail2ban, actualizaciones automáticas, Docker, Volume montado, swap, rotación de logs y dump diario. |
+| Imagen | [`docker/prod/Dockerfile`](../docker/prod/Dockerfile) | Multi-stage, FrankenPHP 1.13.4 con PHP 8.4 y parches de Debian aplicados en cada build. |
+| Servicios | [`docker-compose.prod.yml`](../docker-compose.prod.yml) | `web`, `worker`, `scheduler`, `mysql` y `redis`, con los datos en `DATA_DIR`. |
+| Script de deploy | [`scripts/deploy/desplegar.sh`](../scripts/deploy/desplegar.sh) | Dump previo, pull, up, migraciones, reinicio de la cola, chequeo de salud y **rollback automático**. |
+| CD | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) | Exige `tests` y `seguridad` en verde, escanea la imagen, pide aprobación y despliega. |
+| IaC en CI | [`.github/workflows/infra.yml`](../.github/workflows/infra.yml) | Valida en cada PR; `plan` y `apply` solo a mano, con aprobación. |
 
-**Por qué así:**
-- **FrankenPHP:** trae Caddy adentro y saca solo el certificado HTTPS que Meta exige para el webhook, sin nginx ni certbot.
-- **Un solo droplet:** alcanza para los pilotos y respeta el costo del lean canvas (USD 20-40/mes).
-- **Worker y scheduler separados:** son dos procesos que se caen por separado, tal como los dibuja el C4 de contenedores.
+## Controles de seguridad
 
-## Gestión de secretos
+| Riesgo | Control |
+| :-- | :-- |
+| SSH expuesto a internet | El firewall de DigitalOcean admite el puerto 22 **solo desde las IPs de administración**. El CD agrega la IP del runner durante el deploy y la quita al terminar, aunque falle. |
+| Acceso con contraseña o como root | `PermitRootLogin no`, `PasswordAuthentication no`, `AllowUsers admin deploy`, más fail2ban. |
+| Servidor sin parches | `unattended-upgrades` diario. La imagen se reconstruye con `apt upgrade` y pasa Trivy antes de publicarse. |
+| Suplantación del servidor (MITM) en el deploy | `StrictHostKeyChecking yes` con la huella guardada en `DO_SSH_KNOWN_HOSTS`. |
+| Credenciales filtradas | El token de DigitalOcean del CD tiene scope mínimo (solo firewall). El de GHCR viaja por stdin. La clave SSH se borra del runner. Nada sensible en `terraform.tfvars` ni en git. |
+| Salida abierta a cualquier puerto | Egress limitado a 443, 80, 53, 123 y 587. |
+| Pérdida de datos | Volume con `prevent_destroy`, dump diario con 14 días de retención, dump previo a cada migración y copia opcional a Spaces. |
+| Caídas que nadie ve | Alertas de CPU, memoria y disco, chequeo externo de `/up` y alerta de certificado por vencer. |
+| Cambios de infraestructura sin revisar | `plan` publicado en el resumen del job; `apply` aplica ese mismo plan después de la aprobación del entorno `infra`. |
 
-| Secreto | Dónde vive | Nunca en |
+**Riesgos aceptados**, documentados en el código: 80/443 abiertos a todo internet, porque es una app web pública y Meta no publica IPs estables; y el destino de salida abierto, porque las APIs de Meta y Google no tienen IPs fijas.
+
+## Primera puesta en marcha
+
+### 1. Cuenta y credenciales (una vez)
+
+1. En DigitalOcean, crear dos **tokens de API**:
+   - `DO_TOKEN`: lectura y escritura completa, solo para Terraform.
+   - `DO_TOKEN_FIREWALL`: *custom scopes*, solo `firewall:read` y `firewall:update`, para el CD.
+2. Crear una **clave de Spaces** y un bucket privado `agendallena-tfstate` con versionado activado. Ahí vive el estado de Terraform.
+3. Generar dos pares de claves SSH:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/agendallena_admin   -C admin
+   ssh-keygen -t ed25519 -f ~/.ssh/agendallena_deploy  -C github-actions-deploy
+   ```
+
+### 2. Aprovisionar con Terraform
+
+En local:
+
+```bash
+cd infra/terraform
+cp backend.hcl.example backend.hcl
+cp terraform.tfvars.example terraform.tfvars        # claves públicas, tu IP /32 y email
+export DIGITALOCEAN_TOKEN=...                       # DO_TOKEN
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...   # clave de Spaces
+terraform init -backend-config=backend.hcl
+terraform plan
+terraform apply
+terraform output                                    # ip_publica, firewall_id, webhook_meta
+```
+
+También desde GitHub: **Actions → infra → Run workflow → plan**, y después **apply**, que requiere aprobación. Antes hay que cargar en los entornos `infra-plan` e `infra` los secretos `DO_TOKEN`, `SPACES_KEY` y `SPACES_SECRET`, y las variables `SSH_PUBLICA_ADMIN`, `SSH_PUBLICA_DEPLOY`, `IPS_ADMIN` (por ejemplo `["203.0.113.10/32"]`), `EMAIL_ALERTAS`, `DOMINIO`, `SUBDOMINIO` y `TF_BACKEND_HCL` (el contenido de `backend.hcl`).
+
+### 3. DNS
+
+Un registro **A** del subdominio que apunte a `ip_publica`. Si el dominio usa los nameservers de DigitalOcean, `gestionar_dns = true` lo crea solo. Esperá a que propague: Caddy necesita resolverlo para sacar el certificado.
+
+### 4. `.env` del servidor
+
+Completá en tu máquina una copia de `.env.production.example` y subila:
+
+```bash
+scp -i ~/.ssh/agendallena_admin .env.production admin@IP:/tmp/.env
+ssh -i ~/.ssh/agendallena_admin admin@IP \
+  'sudo install -o deploy -g deploy -m 600 /tmp/.env /opt/agendallena/.env && rm /tmp/.env'
+```
+
+`APP_KEY` en local: `docker compose exec app php artisan key:generate --show`.
+
+### 5. GitHub: entorno `produccion`
+
+En **Settings → Environments → produccion**:
+
+| Tipo | Nombre | Valor |
 | :-- | :-- | :-- |
-| `APP_KEY`, contraseñas de la base, `META_*`, `GOOGLE_CLIENT_*` | `/opt/agendallena/.env` en el droplet, `chmod 600`, dueño `deploy` | El repo, la imagen o los logs de Actions |
-| Tokens OAuth de cada PyME | Tabla `integrations`, encriptados con `APP_KEY` | Variables de entorno |
-| Acceso SSH del CD | GitHub → *Secrets*: `DO_HOST`, `DO_USER`, `DO_SSH_KEY` (clave dedicada, solo para deploy) | Archivos del repo |
-| Publicar la imagen | `GITHUB_TOKEN` del workflow (`packages: write`) | — |
+| Protección | Required reviewers | Vos |
+| Secret | `DO_HOST` | `ip_publica` |
+| Secret | `DO_SSH_KEY` | Contenido de `~/.ssh/agendallena_deploy` (privada) |
+| Secret | `DO_SSH_KNOWN_HOSTS` | Salida de `ssh-keyscan -t ed25519 IP` |
+| Secret | `DO_TOKEN_FIREWALL` | El token con scope de firewall |
+| Variable | `DO_FIREWALL_ID` | `firewall_id` |
+| Variable | `DOMAIN` | El subdominio |
 
-- `.dockerignore` excluye `.env*` del contexto de build, así que la imagen nunca contiene secretos. Se verificó que `/app/.env` no existe en la imagen.
-- El simulador (`/dev/*`) **no existe en producción**: `SoloConSimulador` lo corta con `APP_ENV=production` aunque `META_SIMULADOR` quede encendido. Se verificó con la imagen de producción: devuelve `404`.
+Y en **Settings → Secrets and variables → Actions → Variables** del repositorio: `DEPLOY_ENABLED=true`. Esa variable enciende el CD.
 
-## Primera puesta en marcha (cuando exista el droplet)
+### 6. Primer deploy y alta del negocio
 
-1. **Droplet:** Ubuntu 24.04, Basic de 2 GB (alrededor de USD 12/mes; con 1 GB, MySQL 8.4 queda justo). Agregá tu clave SSH al crearlo.
-2. **DNS:** un registro `A` del subdominio (por ejemplo `agendallena.tudominio.com`) apuntando a la IP del droplet. Esperá a que propague antes del primer `up`, porque Caddy necesita resolver el dominio para sacar el certificado.
-3. **Servidor:**
-   ```bash
-   ssh root@IP
-   curl -fsSL https://get.docker.com | sh
-   adduser --disabled-password deploy && usermod -aG docker deploy
-   mkdir -p /opt/agendallena && chown deploy: /opt/agendallena
-   ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable
-   ```
-4. **Clave de deploy:** generá un par **solo para el CD** (`ssh-keygen -t ed25519 -f deploy_agendallena`). La pública va a `/home/deploy/.ssh/authorized_keys` y la privada al secret `DO_SSH_KEY`.
-5. **`.env` del servidor:** copiá `.env.production.example` a `/opt/agendallena/.env` y completalo (`DOMAIN`, `APP_KEY`, contraseñas, Meta y Google). Después `chmod 600 .env`. Para la `APP_KEY`, en tu máquina: `docker compose exec app php artisan key:generate --show`.
-6. **Imagen privada:** si el paquete de GHCR queda privado, en el droplet corré `docker login ghcr.io` con un token de solo lectura (`read:packages`). Si no, hacé público el paquete.
-7. **GitHub** (repo `agendallenaia`, Settings → Secrets and variables → Actions):
-   - **Secrets:** `DO_HOST` (la IP), `DO_USER` (`deploy`) y `DO_SSH_KEY`.
-   - **Variables:** `DOMAIN` (el subdominio) y **`DEPLOY_ENABLED=true`**. Esta última enciende el workflow.
-   - Creá el *environment* `produccion` si querés aprobación manual antes de cada deploy.
-8. **Primer deploy:** *Actions → deploy → Run workflow*. Después, en el droplet, cargá un negocio y su cuenta:
-   ```bash
-   cd /opt/agendallena
-   docker compose -f docker-compose.prod.yml exec web php artisan cuenta:dar-de-alta   # ver --help
-   ```
-9. **Meta:** en el portal de desarrolladores, registrá `https://SUBDOMINIO/api/v1/webhooks/whatsapp` con el `verify_token` del tenant. Debe validar en verde (CA-01).
-10. **Google:** agregá `https://SUBDOMINIO/api/v1/oauth/google/callback` como URI de redirección autorizada del cliente OAuth.
+**Actions → deploy → Run workflow**, y después:
+
+```bash
+ssh -i ~/.ssh/agendallena_admin admin@IP
+cd /opt/agendallena && docker compose -f docker-compose.prod.yml exec web php artisan cuenta:dar-de-alta --help
+```
+
+### 7. Meta y Google
+
+- **Meta:** registrar `webhook_meta` con el `verify_token` del tenant. Tiene que validar en verde (CA-01).
+- **Google:** agregar `https://SUBDOMINIO/api/v1/oauth/google/callback` como URI de redirección autorizada.
+
+## Cómo se hace cada deploy
+
+Cada merge a `main` dispara `tests`. Si queda en verde, `deploy` arranca solo:
+
+1. **Verificar:** `tests` y `seguridad` tienen que estar en verde para ese commit exacto.
+2. **Imagen:** se construye la imagen, Trivy la escanea (cualquier CVE crítica o alta con arreglo la frena) y se publica en GHCR con el SHA como tag.
+3. **Aprobación:** el entorno `produccion` espera tu OK.
+4. **Desplegar:** se abre SSH solo para la IP del runner y se ejecuta `desplegar.sh`:
+   1. **dump de la base** a `pre-deploy.sql.gz`;
+   2. `pull` y `up -d` de la imagen nueva;
+   3. **`php artisan migrate --force`**;
+   4. `queue:restart`, para que el worker tome el código nuevo;
+   5. chequeo de salud de `https://DOMINIO/up` durante un minuto;
+   6. si no responde sano, **rollback a la imagen anterior** y el job queda en rojo.
+5. Se cierra el SSH y se verifica `/up` desde afuera.
+
+### Migraciones: reglas para que el deploy sea seguro
+
+- **Corren solas en cada deploy**: no hay que entrar al servidor. `migrate --force` aplica solo las pendientes; si no hay ninguna, no hace nada.
+- **El rollback revierte la imagen, no la base.** Por eso cada migración tiene que ser compatible con la versión anterior del código (*expand/contract*):
+  - **Agregar** una columna o tabla: se puede en un solo deploy.
+  - **Renombrar o borrar** una columna: en dos deploys. Primero se agrega lo nuevo y el código usa las dos; en el siguiente, se borra lo viejo.
+  - **Nunca** un `migrate:rollback` automático en producción.
+- **Para volver atrás de verdad**, existe `pre-deploy.sql.gz`, el dump tomado justo antes de migrar:
+  ```bash
+  gunzip -c /opt/agendallena/pre-deploy.sql.gz | docker compose -f docker-compose.prod.yml exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
+  ```
+- Una migración que bloquea tablas grandes (índice sobre millones de filas) se corre fuera de horario con `workflow_dispatch`.
 
 ## Operación
 
@@ -98,11 +188,8 @@ flowchart LR
 cd /opt/agendallena
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f web worker scheduler
-docker compose -f docker-compose.prod.yml exec mysql \
-  sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" agendallena' | gzip > backup-$(date +%F).sql.gz
+sudo /usr/local/bin/agendallena-backup            # dump manual
+ls -lh /mnt/datos/backups
 ```
 
-⚠️ **Pendiente cuando se despliegue:**
-- Backups automáticos de la base (los *Backups* del droplet o un cron con `mysqldump` hacia Spaces).
-- Alertas de que el worker o el scheduler están caídos.
-- Rotación de logs.
+⚠️ **Pendiente cuando se despliegue:** la alerta específica de *worker* o *scheduler* caídos. Hoy la cubre en parte el monitoreo del droplet, pero no ve un contenedor muerto con la app respondiendo. Se resuelve con un `healthcheck` en el compose o con un *heartbeat* del scheduler hacia un servicio externo.
