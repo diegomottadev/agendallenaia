@@ -55,6 +55,13 @@ jobs:
       - name: Generar APP_KEY
         run: docker compose run --rm --no-deps app php artisan key:generate
 
+      # Las vistas usan `@vite`, que exige `public/build/manifest.json`. Sin el
+      # build, cada test que renderiza una pantalla del panel falla con
+      # `ViteManifestNotFoundException` (80 de la primera corrida en GitHub). En
+      # local no se ve porque `public/build` ya existe del `npm run build`.
+      - name: Compilar los assets
+        run: docker run --rm -v "$PWD":/w -w /w node:22.12-bookworm-slim sh -c "npm ci --no-audit --no-fund && npm run build"
+
       # `agendallena_testing` la crea `docker/mysql/init/` al inicializar el
       # volumen, y `RefreshDatabase` corre las migraciones en cada test.
       - name: Correr la suite
