@@ -37,7 +37,7 @@ jobs:
     name: fmt · validate · tflint · Trivy
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
@@ -73,7 +73,7 @@ jobs:
       TF_VAR_subdominio: ${{ vars.SUBDOMINIO }}
       BACKEND_HCL: ${{ vars.TF_BACKEND_HCL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
@@ -107,7 +107,7 @@ jobs:
       TF_VAR_subdominio: ${{ vars.SUBDOMINIO }}
       BACKEND_HCL: ${{ vars.TF_BACKEND_HCL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
