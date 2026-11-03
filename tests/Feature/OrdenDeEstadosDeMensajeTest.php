@@ -143,9 +143,11 @@ class OrdenDeEstadosDeMensajeTest extends TestCase
         array $extra = [],
     ): int {
         $booking = TenantContext::runAs($tenant->id, function () use ($tenant) {
-            $conversacion = Conversation::create([
+            // Una sola conversación por teléfono: es el único (tenant_id, user_phone).
+            $conversacion = Conversation::firstOrCreate([
                 'tenant_id' => $tenant->id,
                 'user_phone' => self::TELEFONO,
+            ], [
                 'current_state' => 'BOOKED',
                 'state_version' => 4,
                 'context_data' => ['nombre' => 'Ana', 'servicio' => 'Corte de pelo'],

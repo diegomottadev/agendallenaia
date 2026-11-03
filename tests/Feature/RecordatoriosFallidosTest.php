@@ -200,9 +200,11 @@ class RecordatoriosFallidosTest extends TestCase
         $inicio = CarbonImmutable::parse($inicioUtc, 'UTC');
 
         return TenantContext::runAs($tenant->id, function () use ($tenant, $inicio, $cliente) {
-            $conversacion = Conversation::create([
+            // Una sola conversación por teléfono: es el único (tenant_id, user_phone).
+            $conversacion = Conversation::firstOrCreate([
                 'tenant_id' => $tenant->id,
                 'user_phone' => self::TELEFONO,
+            ], [
                 'current_state' => 'BOOKED',
                 'state_version' => 4,
                 'context_data' => ['nombre' => $cliente, 'servicio' => 'Corte de pelo'],
