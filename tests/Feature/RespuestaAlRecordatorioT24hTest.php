@@ -185,6 +185,13 @@ class RespuestaAlRecordatorioT24hTest extends TestCase
     private function fakes(): void
     {
         Http::fake([
+            // Desde T-042, «Re-agendar» ofrece horarios nuevos y eso consulta
+            // `freeBusy`. Sin este doble la petición salía a la red real y el
+            // test fallaba al renovar el token, no por lo que prueba.
+            'www.googleapis.com/calendar/v3/freeBusy' => Http::response([
+                'calendars' => ['primary' => ['busy' => []]],
+            ]),
+
             'www.googleapis.com/calendar/v3/calendars/primary/events*' => function (Request $request) {
                 if ($request->method() === 'DELETE') {
                     return Http::response([], 204);

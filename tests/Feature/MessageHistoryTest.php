@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -88,6 +89,11 @@ class MessageHistoryTest extends TestCase
     {
         $tenant = $this->tenantConIntegracion();
 
+        // Meta acepta la bienvenida. Sin este doble el envío salía a la red real
+        // y fallaba; desde que la bienvenida pasa por `PasoEntregado`, un saludo
+        // no entregado deja la conversación en IDLE para que el reintento salude.
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUT']]])]);
+
         (new ProcessMessageJob($this->payload($this->mensajeTexto('wamid.UNO'))))->handle();
 
         TenantContext::runAs($tenant->id, function () {
@@ -95,7 +101,8 @@ class MessageHistoryTest extends TestCase
 
             $this->assertNotNull($c);
             $this->assertSame('5491133334444', $c->user_phone);
-            $this->assertCount(1, $c->messages);
+            // Solo el entrante: la bienvenida entregada también queda en el historial.
+            $this->assertSame(1, $c->messages()->where('direction', Message::ENTRANTE)->count());
 
             /*
              * La conversacion nace en IDLE pero **no se queda ahi**: T-018a

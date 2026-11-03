@@ -103,6 +103,13 @@ class EntregaTrasFalloDeEnvioTest extends TestCase
             'www.googleapis.com/calendar/v3/freeBusy' => Http::response([
                 'calendars' => ['primary' => ['busy' => []]],
             ]),
+            // Elegir un horario crea el evento en Google. Sin este doble la
+            // petición salía a la red real y fallaba al renovar el token.
+            'www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::response([
+                'id' => 'evt_google_reintento',
+                'status' => 'confirmed',
+                'extendedProperties' => ['private' => ['origen' => 'agendallena']],
+            ]),
             'graph.facebook.com/*' => $meta,
         ]);
     }

@@ -29,7 +29,6 @@ use App\Conversacion\Transicion;
 use App\Conversacion\TransicionNoDeclarada;
 use App\Models\Conversation;
 use App\Meta\MetaAdapter;
-use App\Meta\MetaRateLimit;
 use App\Models\Booking;
 use App\Models\BusinessSetting;
 use App\Models\Integration;
@@ -475,16 +474,6 @@ class ProcessMessageJob implements ShouldQueue
     /**
      * @param  array<string,mixed>  $message
      */
-    /**
-     * El mensaje saliente que Meta limitó, a la espera del reintento del job.
-     * ⚠️ Si en ese paso faltaban más envíos después del limitado, no se
-     * recuperan: el reintento manda solo el que falló.
-     */
-    private function claveDePendiente(string $tenantId, string $messageId): string
-    {
-        return "meta:pendiente:{$tenantId}:{$messageId}";
-    }
-
     private function procesarMensaje(Integration $integration, array $message): void
     {
         $messageId = $message['id'] ?? null;
@@ -539,33 +528,7 @@ class ProcessMessageJob implements ShouldQueue
             $conversation = $this->resolverConversacion($message);
             $this->persistirEntrante($conversation, $message);
 
-            /*
-             * AC-09.4 · Un reintento tras un rate limit **no reprocesa**: la
-             * transición del primer intento ya se aplicó, y el mismo mensaje en
-             * el estado nuevo cae en un paso que no lo espera — el cliente se
-             * quedaba sin respuesta. Se manda lo que no salió, y nada más.
-             */
-            $pendiente = Cache::get($this->claveDePendiente($integration->tenant_id, $messageId));
-
-            if (is_array($pendiente)) {
-                $this->adapterDe($integration, $conversation)
-                    ->reenviar($conversation, $pendiente['cuerpo'], $pendiente['texto'], $this->recibidoEn);
-                Cache::forget($this->claveDePendiente($integration->tenant_id, $messageId));
-            } else {
-                try {
-                    $this->entregarAlFlujo($integration, $conversation, $message);
-                } catch (MetaRateLimit $e) {
-                    if ($e->cuerpo !== null) {
-                        Cache::put(
-                            $this->claveDePendiente($integration->tenant_id, $messageId),
-                            ['cuerpo' => $e->cuerpo, 'texto' => (string) $e->textoParaElHistorial],
-                            now()->addHour(),
-                        );
-                    }
-
-                    throw $e;
-                }
-            }
+            $this->entregarAlFlujo($integration, $conversation, $message);
 
             /*
              * Se marca **al terminar**, no al empezar. Si `entregarAlFlujo()`
@@ -662,8 +625,20 @@ class ProcessMessageJob implements ShouldQueue
             if ($estado === Estado::Idle) {
                 // T-035 · El bot entendió: la racha de intentos fallidos se corta.
                 Derivacion::olvidarIntentos($conversation);
-                $maquina->aplicar($conversation, Transicion::MensajeInicial);
-                $this->responderBienvenida($integration, $conversation->fresh());
+
+                /*
+                 * AC-09.4 · La bienvenida es un paso como cualquier otro: si Meta
+                 * la limita, la transición se deshace y el reintento de la cola
+                 * vuelve a saludar. Fuera de `entregandoElPaso`, el reintento
+                 * encontraba la conversación ya en GATHERING_PARAMS y el mismo
+                 * «Hola» caía en un estado sin intérprete: el cliente no recibía
+                 * nada. Lo encontró el E2E de caminos de error.
+                 */
+                $this->entregandoElPaso($conversation, function () use ($maquina, $conversation, $integration) {
+                    $maquina->aplicar($conversation, Transicion::MensajeInicial);
+
+                    return $this->responderBienvenida($integration, $conversation->fresh());
+                });
 
                 return;
             }
@@ -1417,11 +1392,15 @@ class ProcessMessageJob implements ShouldQueue
             $maquina->aplicar($conversation, Transicion::Reinicia, limpiarContexto: true);
         }
 
-        $maquina->aplicar($conversation->fresh(), Transicion::MensajeInicial);
-        $this->responderBienvenida($integration, $conversation->fresh());
+        $this->entregandoElPaso($conversation, function () use ($maquina, $conversation, $integration) {
+            $maquina->aplicar($conversation->fresh(), Transicion::MensajeInicial);
+
+            return $this->responderBienvenida($integration, $conversation->fresh());
+        });
     }
 
-    private function responderBienvenida(Integration $integration, Conversation $conversation): void
+    /** @return string|null  El `wamid` entregado, o `null` si el envío no salió. */
+    private function responderBienvenida(Integration $integration, Conversation $conversation): ?string
     {
         $tenant = $conversation->tenant;
         $config = BusinessSetting::withoutTenantScope()
@@ -1448,18 +1427,16 @@ class ProcessMessageJob implements ShouldQueue
              * que se puede usar cuando la configuración del tenant es lo que
              * falta.
              */
-            (new MetaAdapter($metaIntegration))->enviarTexto(
+            return (new MetaAdapter($metaIntegration))->enviarTexto(
                 $conversation,
                 BusinessSetting::valoresPorDefecto()['fallback_message'],
                 $this->recibidoEn,
             );
-
-            return;
         }
 
         $mensaje = app(Bienvenida::class)->mensaje($conversation, $tenant, $config);
 
-        (new MetaAdapter($metaIntegration))
+        return (new MetaAdapter($metaIntegration))
             ->enviarInteractivo($conversation, $mensaje, $this->recibidoEn);
     }
 
