@@ -8,7 +8,7 @@
 # Lo que cambia es el `command` en docker-compose.prod.yml.
 
 # --- 1 · assets del panel (Vite) ---------------------------------------------
-FROM node:22.12-bookworm-slim AS assets
+FROM node:26.13-bookworm-slim AS assets
 WORKDIR /build
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
