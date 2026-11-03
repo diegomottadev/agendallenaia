@@ -1,6 +1,12 @@
 # T-043 · Aviso t-2h *(condicional — no arrancar sin RF)*
 
-> ## ✅ Construido el 2026-08-25 — **sin la evidencia que este mismo ticket pedía**
+> ## ⚠️ PERDIDO — pendiente de reconstruir
+>
+> **Se construyó el 2026-08-25 en la copia de trabajo de Windows, que nunca se commiteó, y se perdió al migrar a Debian (confirmado el 2026-11-03).** No está en el repositorio: no existen `avisos:enviar` ni `AvisoT2hTest`. Lo que sigue describe lo que se había construido y sirve como especificación para rehacerlo con TDD.
+>
+> ---
+>
+> **Registro original: construido el 2026-08-25, sin la evidencia que este mismo ticket pedía.**
 >
 > Se construyó por decisión, no porque el piloto haya mostrado que el aviso de 24
 > horas no alcanza. **La reserva de abajo sigue en pie:** no hay RF, los criterios

@@ -51,13 +51,12 @@ Estos cuatro son datos y configuración, **no** código, y con la suite en verde
 
 ## ✅ Estado al 2026-08-26: **645 tests en verde · 42 de los 50 tickets construidos**
 
-⚠️ **Verificado el 2026-11-03 en este repositorio (`agendallena` de GitHub): 686 tests, todos en verde en el CI.** Pero **varias cosas que describe esta sección no están en este código**:
-- el aviso t-2h (T-043, `avisos:enviar`, `AvisoT2hTest`);
-- el selector de semana → día → hora (`ListaDeSemanas`, `ListaDeDias`);
-- `EnvioProgramadoDeAviso`;
-- el servicio `scheduler` del `docker-compose.yml` de desarrollo.
+🔴 **Confirmado el 2026-11-03: parte del trabajo se perdió.** La copia de Windows nunca se commiteó, y al pasar a Debian solo llegó lo que estaba en GitHub. **En este repositorio hay 686 tests en verde y 41 de los 50 tickets**, no 42. Lo perdido, marcado abajo con **⚠️ PERDIDO**:
+- **T-043, el aviso t-2h:** el ticket volvió a `tickets/Next-iteraction/`.
+- **El selector de semana → día → hora:** no tenía ticket.
+- **El refactor `EnvioProgramadoDeAviso`.**
 
-En el código hay **4** tareas agendadas, no 5. Lo más probable es que ese trabajo haya quedado en otra copia del proyecto (la de Windows) sin subirse. Hasta confirmarlo, lo que se afirma abajo sobre esas piezas describe esa copia, no este repositorio.
+Las secciones se conservan porque sirven de especificación para rehacerlo con TDD. El `scheduler` de desarrollo, que también faltaba, se agregó al `docker-compose.yml` ese día.
 
 ⚠️ **Los tickets terminados se movieron a `.claude/docs/tickets/Finish/`** con los enlaces reescritos (46 archivos). En `tickets/` quedan solo los 9 frenados por decisión.
 
@@ -107,7 +106,9 @@ Lo verificado, con números:
 
 Corregido con un servicio `scheduler` en el compose, corriendo `php artisan schedule:work`. **Verificado ejecutando, no solo arrancado**: a las 22:15:09 despachó `conversaciones:expirar`, `agendamientos:conciliar` y `plantillas:sincronizar` en background.
 
-#### Las cinco tareas agendadas, qué hace cada una y qué se rompe sin ella
+#### Las tareas agendadas, qué hace cada una y qué se rompe sin ella
+
+⚠️ **En el código hay 4**: la de `avisos:enviar` se perdió con T-043.
 
 La cadencia vive en `routes/console.php`, pero **los números salen de constantes del propio comando** cuando la política es del comando y no del cron. Las cinco corren con `withoutOverlapping()` y `runInBackground()`.
 
@@ -115,7 +116,7 @@ La cadencia vive en `routes/console.php`, pero **los números salen de constante
 | :-- | :-: | :-- | :-- |
 | `conversaciones:expirar`<br>*(T-018b)* | 5 min | Devuelve a `IDLE` las conversaciones sin actividad. El TTL son **30 min** (`MINUTOS_POR_DEFECTO`), así que expiran entre los 30 y los 35 — indistinguible para el cliente | El cliente que volvió tres días después retoma un flujo a medias y el bot le contesta sobre un turno que ya no está pidiendo |
 | `recordatorios:enviar`<br>*(T-037)* | 10 min | Manda el recordatorio interactivo **t-24h ± 10 min** con los botones Confirmar / Re-agendar / Cancelar | **Muere el número del pitch.** Es el único que se traduce directo a plata: sin recordatorio no hay caída del ausentismo que vender |
-| `avisos:enviar`<br>*(T-043)* | 10 min | Manda el aviso **t-2h ± 10 min** a los turnos que **todavía no confirmaron**. Reusa la plantilla de 24 h, que es la única aprobada con botones | Se pierde la segunda oportunidad sobre justo el cliente que más riesgo de ausencia tiene: el que no contestó el primero |
+| ⚠️ **PERDIDO** `avisos:enviar`<br>*(T-043)* | 10 min | Manda el aviso **t-2h ± 10 min** a los turnos que **todavía no confirmaron**. Reusa la plantilla de 24 h, que es la única aprobada con botones | Se pierde la segunda oportunidad sobre justo el cliente que más riesgo de ausencia tiene: el que no contestó el primero |
 | `agendamientos:conciliar`<br>*(T-030)* | 15 min<br>`MINUTOS_ENTRE_CORRIDAS` | Cruza Google contra `bookings` **en las dos direcciones**: reporta el evento sin fila, y deja en duda el turno cuyo evento el dueño borró | El horario huérfano queda ocupado sin turno real detrás **para siempre**. Los 15 min son exactamente cuánto se aceptó pagar por haber elegido conciliar en vez de compensar |
 | `plantillas:sincronizar`<br>*(T-050)* | 15 min<br>`MINUTOS_ENTRE_CORRIDAS` | Le pregunta a Meta el estado de las tres plantillas de cada PyME y destraba a la que ya fue aprobada | **La PyME nueva no manda un solo mensaje, nunca.** No hay handler del webhook `message_template_status_update`, así que esta consulta es lo único que saca una plantilla de `PENDING` |
 
@@ -144,7 +145,7 @@ El `access_token` vencido de arriba **no fue un evento aislado: volvió a fallar
 
 ⚠️ **Antes de diagnosticar un envío que no sale, preguntá por el token**, no por el código: `Http::withToken($t)->get('.../v21.0/debug_token', ['input_token' => $t])`. Un `expires_at: 0` es lo único que no caduca; cualquier otro número es una bomba de tiempo.
 
-#### ✅ El aviso t-2h, verificado contra Meta real
+#### ⚠️ PERDIDO · El aviso t-2h, verificado contra Meta real
 
 Salió a un celular real y **el webhook lo movió a `delivered` solo**. El `{{4}}` resolvió *«hoy a las 21:12»*: la rama de mismo-día-local, que hasta ahí solo existía en tests.
 
@@ -176,7 +177,7 @@ No son olvidos: dependen de funcionalidad que el recorte dejó afuera, y un test
 
 ⚠️ **Y es la tercera vez que aparece la misma forma.** `todasAprobadas()` —el método estricto, que sí contestaba bien— **no tenía ningún llamador en producción**: sus únicos invocadores eran los tests, igual que `AltaDeCuenta` el día anterior. Dos métodos de la misma clase contestaban distinto sobre el mismo estado y el que decidía el envío era el laxo. Ahora `pendientes()` recorre el juego completo de `NOMBRES`, así que las dos respuestas coinciden.
 
-### T-043 · Aviso t-2h — 2026-08-25
+### ⚠️ PERDIDO · T-043 · Aviso t-2h — 2026-08-25
 
 **El ticket estaba cerrado a propósito y se reabrió por decisión, no por evidencia.** Decía textual *«es el único ticket del plan que conviene no hacer hasta tener evidencia»* y recomendaba mandarlo a mano una semana de piloto antes de escribir código. **No hay RF: los criterios que se construyeron son propuesta, no definición acordada**, y eso quedó escrito en la cabecera de `AvisoT2hTest` para que no se confunda dentro de seis meses.
 
@@ -188,17 +189,21 @@ No son olvidos: dependen de funcionalidad que el recorte dejó afuera, y un test
 
 **El `{{4}}` dice «hoy a las 15:30» y no la fecha completa.** Con la misma plantilla y el mismo parámetro, al cliente le llegan dos mensajes de texto idéntico con 22 horas de diferencia y el segundo se lee como un error nuestro. Y **«hoy» no siempre es hoy**: un turno a las 00:30 recibe su aviso a las 22:30 del día anterior, así que la comparación se hace por día local del tenant. **Verificado por mutación** — forzar `isSameDay` a `true` mata ese test y solo ese.
 
-### ⚠️ El sexto caso de «suite verde, circuito muerto», y lo encontró un test escrito para buscarlo
+### ⚠️ PERDIDO · El sexto caso de «suite verde, circuito muerto», y lo encontró un test escrito para buscarlo
+
+*El arreglo (`whereIn` sobre los dos tipos) se perdió con T-043: hoy `RespuestaAlRecordatorio` filtra solo `reminder_24h`, que es correcto mientras no exista el aviso t-2h. Al reconstruirlo, este caso vuelve a aparecer.*
 
 `RespuestaAlRecordatorio::recordatorioQueLoOrigino()` filtraba `type = reminder_24h` a secas. Con eso, **el botón del aviso t-2h no resolvía nunca**: el `context.id` no encontraba su fila, `manejar()` devolvía `false` y el mensaje caía al flujo normal. El cliente tocaba *Confirmar* dos horas antes del turno y el turno seguía en `scheduled`, sin ningún error. Corregido con un `whereIn` sobre los dos tipos; `confirmation` queda afuera a propósito porque esa plantilla no lleva botones.
 
-### El refactor que salió de construirlo
+### ⚠️ PERDIDO · El refactor que salió de construirlo
 
 T-043 nació como una copia de doscientas líneas de T-037. Se extrajo `EnvioProgramadoDeAviso` con la suite en verde: los dos comandos quedaron en 95 y 84 líneas y fijan solo **cuándo** se manda, **qué** se manda y **cómo se nombra en el log**. La duplicación tenía un modo de falla concreto: todos los frenos de ese comando —cuenta sin `waba_id`, plantillas sin aprobar, evento borrado en Google, candado antes de mandar— son defectos que se descubrieron de a uno, y con dos copias el arreglo del siguiente llegaba a una sola.
 
 ⚠️ **Trampa de la corrida sucia, otra vez.** Un `artisan test` completo murió por OOM a mitad de camino y dejó `agendallena_testing` sin la tabla `migrations`: la corrida siguiente dio **47 rojos**, cuatro de ellos con mensajes de aserción perfectamente creíbles sobre un default que sí había cambiado. Ninguno era real. `migrate:fresh` sobre la base de test y volvieron los 625 verdes. **Un mensaje de aserción plausible no descarta la corrida sucia.**
 
-### Selector de semana → día → hora — 2026-08-26 · **terminado y verificado contra Meta real**
+### ⚠️ PERDIDO · Selector de semana → día → hora — 2026-08-26
+
+*Se había terminado y verificado contra Meta real en la copia de Windows. En este repositorio la lista de horarios es la de siempre (`ListaDeHorarios`), sin selector de semana ni de día.*
 
 `ListaDeSemanas` + `ListaDeDias` + enganche en `ProcessMessageJob`. **20 tests nuevos**, todos con su rojo previo; 4 verificaciones por mutación. Una sola consulta a `freeBusy` del horizonte entero, semanas y días derivados en memoria y **sin cachear**: mostrar un horario que otro tomó hace 40 segundos es peor que la llamada de más, y solo la paga el que navega.
 
