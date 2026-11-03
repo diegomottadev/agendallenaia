@@ -26,7 +26,10 @@ ARCHIVO="${COMPOSE_FILE:-docker-compose.prod.yml}"
 COMPOSE=(docker compose -f "$ARCHIVO")
 ESTADO=.image_tag
 ANTERIOR="$(cat "$ESTADO" 2>/dev/null || true)"
-leer() { grep -E "^$1=" .env | tail -1 | cut -d= -f2-; }
+# Una variable que no está (DOMAIN no existe en el modo compartido) devuelve
+# vacío. Sin el `|| true`, con pipefail el grep fallido mataba el script en
+# silencio antes de empezar.
+leer() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2-; }
 DOMINIO="$(leer DOMAIN)"
 PUERTO_LOCAL="$(leer PUERTO_LOCAL)"
 
