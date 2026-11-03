@@ -70,12 +70,11 @@ test('un cliente reserva por WhatsApp y el turno aparece en el panel', async ({ 
   await captura(page, '04-panel');
 
   await page.goto('/panel/conversaciones');
-  // Se busca por teléfono, que es único por corrida.
-  // ⚠️ No por nombre: el panel muestra `conversations.user_name`, y hoy el nombre
-  // que da el cliente queda solo en `context_data` y en el turno — la fila dice
-  // "Sin nombre". Bug conocido, pendiente de corregir.
+  // Se busca por teléfono, que es único por corrida, y además tiene que mostrar
+  // el nombre que dio el cliente: antes la fila decía "Sin nombre".
   const fila = page.locator('tr', { hasText: telefono });
   await expect(fila).toBeVisible();
+  await expect(fila).toContainText(cliente);
   await expect(fila).toContainText('Turno agendado');
   await expect(fila).toContainText('Ver en Google Calendar');
   await captura(page, '05-conversaciones');

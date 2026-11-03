@@ -418,7 +418,7 @@ Hay **un agente por fase**, y el aislamiento es el punto: el que escribe el test
 
 | Fase | Agente | Escribe | Tiene prohibido |
 | :-- | :-- | :-- | :-- |
-| 🔴 ROJO | `tdd-test-writer` | Solo `tests/` | Cualquier cosa en `app/` |
+| 🔴 ROJO | `tdd-test-writer` | Solo `tests/` y `e2e/tests/` | Cualquier cosa en `app/` |
 | 🟢 VERDE | `tdd-implementer` | Solo `app/` | Tocar un test |
 | 🔵 REFACTOR | `tdd-refactorer` | Solo estructura | Cambiar comportamiento o tests |
 

@@ -866,6 +866,12 @@ class ProcessMessageJob implements ShouldQueue
             $conversation, Transicion::NombreRecibido, ['nombre' => $nombre, 'esperando' => null]
         );
 
+        // El panel lista `user_name`, no `context_data`: sin esta línea la
+        // conversación figuraba «Sin nombre» aunque el cliente lo hubiera dado.
+        // Por consulta y no por `save()` para no pisar lo que acaba de escribir
+        // la máquina de estados.
+        Conversation::whereKey($conversation->id)->update(['user_name' => $nombre]);
+
         /*
          * T-045 · AC-13.1 · El lead se vuelca **al salir de `GATHERING_PARAMS`**,
          * no al reservar. Es la razón entera por la que la captura del nombre se
