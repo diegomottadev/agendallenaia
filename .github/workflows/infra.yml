@@ -82,7 +82,7 @@ jobs:
       - run: terraform plan -input=false -out=plan.tfplan
       - run: terraform show -no-color plan.tfplan >> "$GITHUB_STEP_SUMMARY"
       # El plan puede contener valores sensibles: vive un día y solo lo baja `apply`.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: plan
           path: infra/terraform/plan.tfplan
