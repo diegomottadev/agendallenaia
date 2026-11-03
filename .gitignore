@@ -46,3 +46,12 @@ Thumbs.db
 
 # Configuracion local de Claude Code: permisos propios de cada maquina.
 /.claude/settings.local.json
+
+# Mutation testing (Infection): reportes, copias mutadas y cache de cobertura.
+# Se regeneran con `vendor/bin/infection`; la config (infection.json5) si se versiona.
+/build/infection
+infection.log
+infection.html
+summary.log
+per-mutator.md
+/.infection

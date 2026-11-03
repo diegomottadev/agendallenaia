@@ -1,0 +1,73 @@
+{
+    // Mutation testing (Infection) acotado a las clases PURAS y críticas del dominio.
+    //
+    // Por qué solo estas: son lógica sin base ni HTTP, las cubre `tests/Unit` y
+    // una corrida tarda segundos. Mutar `app/` entero contra la suite Feature
+    // (MySQL real, ~650 tests) son horas y pisa la base de otra sesión.
+    //
+    //   NumeroDeWhatsApp     · el 9 de los móviles argentinos: si se rompe, el bot no contesta
+    //   TablaDeTransiciones  · qué transiciones existen; lo que no está, no pasa (T-018)
+    //   Bienvenida           · palabras de reinicio (AC-16.3); mensaje() necesita modelos y queda sin cubrir acá
+    //
+    // ⚠️ ListaDeHorarios NO está: sus tests viven en tests/Feature (usan la base),
+    // así que contra la testsuite Unit todos sus mutantes salen "no cubiertos" y
+    // solo bajan el MSI sin decir nada. Para revisarla, ver /mutation-review.
+    //
+    // Correr (siempre con base propia, aunque los Unit no la toquen):
+    //   docker compose exec -T -e DB_DATABASE=agendallena_test_m7 app vendor/bin/infection --threads=4
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["app/Meta", "app/Conversacion"],
+        // Infection no tiene una lista de archivos: se incluye la carpeta y se
+        // excluye todo lo que no sea una de las clases elegidas (regex sobre la
+        // ruta relativa a cada carpeta).
+        "excludes": [
+            "/^(?!(NumeroDeWhatsApp|TablaDeTransiciones|Bienvenida)\\.php$)/"
+        ]
+    },
+    "phpUnit": {
+        "configDir": "."
+    },
+    // Solo la testsuite Unit: rápida y sin base.
+    "testFrameworkOptions": "--testsuite=Unit",
+    "timeout": 20,
+    "tmpDir": "build/infection/tmp",
+    "logs": {
+        "text": "build/infection/infection.log",
+        "summary": "build/infection/summary.log",
+        "html": "build/infection/infection.html"
+    },
+    "mutators": {
+        "@default": true,
+        // Mutantes EQUIVALENTES: cambian el código pero no el comportamiento
+        // observable, así que ningún test puede matarlos. Se ignoran por línea
+        // (no por mutador entero) para que un mutante nuevo en el mismo método
+        // siga apareciendo. Analizados el 2026-11-03; si cambia el método,
+        // revisar si siguen siendo equivalentes.
+        "ReturnRemoval": {
+            // Sin el return temprano, un número no argentino cae en el chequeo
+            // de `549`, que tampoco matchea, y devuelve los mismos dígitos.
+            "ignore": ["App\\Meta\\NumeroDeWhatsApp::paraEnviar::53"]
+        },
+        "UnwrapArrayMap": {
+            // Normalizar la lista de palabras solo cambia `menú` por `menu`,
+            // que ya está en la lista.
+            "ignore": ["App\\Conversacion\\Bienvenida::esPalabraDeReinicio::104"]
+        },
+        "UnwrapTrim": {
+            // El `preg_replace('/[^a-z0-9]/')` de la línea siguiente ya borra
+            // los espacios que sacaría el trim.
+            "ignore": ["App\\Conversacion\\Bienvenida::normalizar::109"]
+        },
+        "ArrayItemRemoval": {
+            // Ninguna palabra de reinicio lleva `á`. Si se agrega una («atrás»),
+            // este ignore deja de valer: sacarlo.
+            "ignore": ["App\\Conversacion\\Bienvenida::normalizar::111"]
+        }
+    },
+    // Piso: si el MSI de lo cubierto baja de acá, la corrida falla. Medido el
+    // 2026-11-03: 75 % con los tests que había, 100 % después de sumar
+    // NumeroExtranjeroLargoTest y TransicionesDeclaradasTest e ignorar los
+    // cuatro equivalentes de arriba.
+    "minCoveredMsi": 100
+}
