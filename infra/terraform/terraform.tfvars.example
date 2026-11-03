@@ -1,0 +1,15 @@
+# Copiar a terraform.tfvars (no se versiona). Ninguna clave privada ni token va acá:
+# el token de DigitalOcean se pasa con la variable de entorno DIGITALOCEAN_TOKEN.
+clave_ssh_publica     = "ssh-ed25519 AAAA... admin"
+clave_ssh_deploy      = "ssh-ed25519 AAAA... github-actions-deploy"
+ips_de_administracion = ["203.0.113.10/32"]
+email_alertas         = "alertas@tudominio.com"
+
+# Cuando exista el subdominio:
+# dominio       = "tudominio.com"
+# subdominio    = "agendallena"
+# gestionar_dns = false # true solo si el dominio usa los nameservers de DigitalOcean
+
+# region            = "nyc3"
+# tamanio_droplet   = "s-1vcpu-2gb"
+# backups_en_spaces = true

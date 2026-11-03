@@ -1,0 +1,142 @@
+# T-031 · criterio 5 · La suite corre en integracion continua y el build falla si
+# alguno de los cuatro criterios de husos se rompe.
+#
+# ## Por que se construye la imagen del proyecto y no se usa `setup-php`
+#
+# Un runner con PHP instalado por accion trae **la tzdata del runner**, y la
+# version de tzdata es parte del contrato de T-031: el `Dockerfile` la fija a
+# proposito porque Chile movio su cambio estacional en 2022 y Paraguay lo elimino
+# en 2024. Con la base de otro origen, los tests de husos pasan o fallan por una
+# razon que no es la del producto — que es exactamente el modo de falla que T-031
+# existe para cerrar. Correr dentro de la imagen del proyecto ademas verifica que
+# el `Dockerfile` sigue construyendo.
+#
+# ⚠️ El `php` de un runner tampoco sirve por lo mismo que no sirve el de Windows:
+# el proyecto exige 8.4 y el `platform_check` de Composer aborta con cualquier
+# otro.
+
+name: tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: Suite completa (PHP 8.4 · MySQL 8.4 · Redis 7)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `phpunit.xml` fija el nombre de la base de tests, pero hereda host y
+      # credenciales del `.env`. Sin este paso la suite se conecta a ningun lado.
+      - name: Preparar el entorno
+        run: cp .env.example .env
+
+      - name: Levantar mysql y redis
+        run: docker compose up -d --wait mysql redis
+
+      # El worker no se levanta: la suite encola con `Queue::fake()` o procesa en
+      # linea, y un worker real compitiendo por los jobs vuelve los tests
+      # intermitentes.
+      - name: Construir la imagen de la aplicacion
+        run: docker compose build app
+
+      - name: Instalar dependencias
+        run: docker compose run --rm --no-deps app composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Generar APP_KEY
+        run: docker compose run --rm --no-deps app php artisan key:generate
+
+      # Las vistas usan `@vite`, que exige `public/build/manifest.json`. Sin el
+      # build, cada test que renderiza una pantalla del panel falla con
+      # `ViteManifestNotFoundException` (80 de la primera corrida en GitHub). En
+      # local no se ve porque `public/build` ya existe del `npm run build`.
+      - name: Compilar los assets
+        run: docker run --rm -v "$PWD":/w -w /w node:22.12-bookworm-slim sh -c "npm ci --no-audit --no-fund && npm run build"
+
+      # `agendallena_testing` la crea `docker/mysql/init/` al inicializar el
+      # volumen, y `RefreshDatabase` corre las migraciones en cada test.
+      - name: Correr la suite
+        run: docker compose run --rm app php artisan test
+
+      # Se corre aparte y despues de la suite: si los cuatro criterios de husos se
+      # rompen, el log dice "husos" y no "428 tests" — que es la diferencia entre
+      # un build rojo que se lee y uno que se ignora.
+      - name: Husos horarios (AC-07.1 a AC-07.4)
+        run: docker compose run --rm app php artisan test --filter=ZonasHorariasTransversalTest
+
+      - name: Bajar todo
+        if: always()
+        run: docker compose down -v
+
+  # E2E del flujo principal con Playwright (e2e/): un cliente reserva por el
+  # simulador de WhatsApp y la duena ve el turno en el panel. Meta y Google los
+  # contestan los mocks locales; todo lo demas es el sistema real.
+  e2e:
+    name: E2E (Playwright · reserva por WhatsApp → panel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar el entorno con el simulador encendido
+        run: |
+          cp .env.example .env
+          cat >> .env <<'ENV'
+          META_APP_SECRET=ci-secret
+          META_SIMULADOR=true
+          META_GRAPH_URL=http://app:8000/api/dev/meta
+          META_SIMULADOR_WEBHOOK_URL=http://app:8000/api/v1/webhooks/whatsapp
+          GOOGLE_API_URL=http://app:8000/api/dev/google
+          ENV
+
+      - name: Levantar mysql y redis
+        run: docker compose up -d --wait mysql redis
+
+      - name: Construir la app e instalar dependencias
+        run: |
+          docker compose build app
+          docker compose run --rm --no-deps app composer install --no-interaction --prefer-dist --no-progress
+          docker compose run --rm --no-deps app php artisan key:generate
+          docker run --rm -v "$PWD":/w -w /w node:22.12-bookworm-slim sh -c "npm ci --no-audit --no-fund && npm run build"
+
+      - name: Base con datos de demo y negocios simulados
+        run: |
+          docker compose run --rm app php artisan migrate --seed --force
+          docker compose run --rm app php artisan db:seed --class=RolesDemoSeeder --force
+          docker compose run --rm app php artisan dev:whatsapp:preparar
+
+      - name: Levantar app y worker
+        run: |
+          docker compose up -d app worker
+          timeout 60 sh -c 'until curl -sf http://localhost:8000/login >/dev/null; do sleep 2; done'
+
+      - name: Correr Playwright
+        run: E2E_UID=$(id -u) E2E_GID=$(id -g) docker compose --profile e2e run --rm e2e
+
+      - name: Guardar reporte, video y trazas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 14
+
+      - name: Logs de la app si falla
+        if: failure()
+        run: docker compose logs app worker --tail=200
+
+      - name: Bajar todo
+        if: always()
+        run: docker compose down -v

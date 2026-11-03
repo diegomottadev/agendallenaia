@@ -1,0 +1,21 @@
+# OWASP A03 · Actualizaciones de seguridad y de versión, en PRs semanales.
+# Cada PR pasa por los workflows `tests` y `seguridad` antes de mergearse.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule: { interval: monthly }
+  - package-ecosystem: docker
+    directory: /docker/prod
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

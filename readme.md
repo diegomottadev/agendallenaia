@@ -13,7 +13,7 @@
 > - **Documentación completa:** [`.claude/docs/`](.claude/docs/README.md). Incluye PRD, lean canvas, C4, DER, flujos, 26 historias, 50 tickets, story maps, estimación y decisiones.
 > - **Prompts:** [`prompts.md`](prompts.md), con los prompts clave de cada sección.
 > - **Contexto de la IA:** [`CLAUDE.md`](CLAUDE.md), el contexto con el que trabajan los agentes del proyecto.
-> - **Código:** [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena).
+> - **Código:** en este mismo repo (`app/`, `resources/`, `database/`, `tests/`, `e2e/`), traído con su historial desde [diegomottadev/agendallena](https://github.com/diegomottadev/agendallena). El README técnico original, en inglés, está en [`docs/README-codigo.md`](docs/README-codigo.md).
 
 ---
 
@@ -39,8 +39,8 @@ Mientras tanto, el proyecto corre en local con Docker ([1.4](#14-instrucciones-d
 
 ### 0.5. URL o archivo comprimido del repositorio
 
-- Código: https://github.com/diegomottadev/agendallena
-- Entrega del máster (este repo): https://github.com/diegomottadev/agendallenaia
+- **Este repo (código y documentación):** https://github.com/diegomottadev/agendallenaia
+- Repo de desarrollo original: https://github.com/diegomottadev/agendallena
 
 ---
 
@@ -123,7 +123,7 @@ La tercera fila define el producto: **a una PyME no se le puede pedir que cambie
 | **5 · La conversación aparece con su turno** y el enlace al evento en Google Calendar | **6 · El detalle muestra el historial completo**, entrantes y salientes |
 | ![Conversaciones](docs/capturas/05-conversaciones.png) | ![Detalle](docs/capturas/06-detalle-conversacion.png) |
 
-> ⚠️ **Bug conocido, visible en la captura 5:** el panel muestra "Sin nombre". El nombre que da el cliente queda en `context_data` y en el turno (`bookings.client_name`), pero no se copia a `conversations.user_name`, que es lo que lee el listado. Se corrige en la próxima entrega con su test de regresión.
+> ✅ **Corregido en la entrega 2:** el panel mostraba «Sin nombre» porque el nombre del cliente quedaba en `context_data` y en el turno, pero no en `conversations.user_name`, que es lo que lee el listado. Lo encontró el E2E y se corrigió con su test de regresión primero. En la captura 5, las filas con nombre son de después del arreglo; las «Sin nombre» se crearon antes y no se rellenaron.
 
 ⚠️ **Pendiente:** un video narrado de 2-3 minutos que recorra también el recordatorio t-24 h y la configuración del negocio.
 
@@ -140,8 +140,8 @@ Recorridos documentados:
 **1. Levantar el proyecto**
 
 ```bash
-git clone https://github.com/diegomottadev/agendallena.git
-cd agendallena
+git clone https://github.com/diegomottadev/agendallenaia.git
+cd agendallenaia
 cp .env.example .env
 
 docker compose up -d mysql redis
@@ -357,14 +357,23 @@ Guía paso a paso (droplet, DNS, usuario de deploy, secretos, Meta y Google): [`
 | **Ids de botones sellados** | `IdSellado`: un botón viejo o manipulado no ejecuta una acción fuera de su estado. |
 | **Simulador cerrado en producción** | `SoloConSimulador` devuelve `404` en `/dev/*` con `APP_ENV=production`, aunque `META_SIMULADOR` quede encendido: un endpoint que firma webhooks no puede estar expuesto. |
 | **Imagen sin secretos** | `.dockerignore` excluye `.env*`. En producción, `APP_DEBUG=false`, `expose_php=0` y cookies `secure`. |
+| **Cabeceras de seguridad** (OWASP A02) | `CabecerasDeSeguridad` en toda respuesta: CSP con nonce (sin `'unsafe-inline'` en scripts), `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` y HSTS por HTTPS. Sesión cifrada en producción. |
+| **Webhook acotado** (OWASP A06) | Antes de calcular la firma: límite de 600 pedidos por minuto por IP y cuerpo de hasta 256 KB (`413` si lo supera). |
+| **Cadena de suministro** (OWASP A03) | Workflow `seguridad` en cada push, cada PR y todos los lunes: `composer audit`, `npm audit`, gitleaks sobre toda la historia y Trivy sobre la imagen de producción. Dependabot para Composer, npm, Docker y Actions. Al activarlo se corrigieron una vulnerabilidad crítica de `laravel/framework`, una de `shell-quote` y varias altas, y la imagen pasó de 488 CVE altas o críticas a 0 con arreglo disponible. |
+
+Revisión completa contra el **OWASP Top 10:2025**, categoría por categoría, con las reglas que debe seguir todo código nuevo: sección *Seguridad* de [`CLAUDE.md`](CLAUDE.md). ⚠️ Pendiente para cuando haya usuarios reales: regla de contraseña y segundo factor (hoy no hay alta de usuarios) y alertas de worker y scheduler caídos.
 
 ### **2.6. Tests**
 
 | Nivel | Herramienta | Qué cubre |
 | :-- | :-- | :-- |
+| **Unitarios** | PHPUnit 12, `tests/Unit/` (67 tests) | Lógica pura sin base: normalización de teléfonos, palabra de reinicio y las transiciones de la máquina de estados, con reglas que valen para todos los estados (sin callejones sin salida, todo estado alcanzable). |
+| **Propiedades** | **Eris** (`PropiedadesTest`) | Cinco propiedades sobre entradas generadas al azar, incluidos bytes inválidos, emojis y teléfonos de cualquier país: idempotencia de la normalización, nunca lanza, un turno agendado nunca va a `ERROR_FALLBACK`. |
+| **Mutación** | **Infection** (`infection.json5`) | Rompe el código a propósito y exige que algún test lo detecte: **MSI 100 %** (103 de 103 mutantes) sobre las clases críticas, con `minCoveredMsi: 100`. |
 | **Comportamiento e integración** | PHPUnit 12, **más de 600 tests** en `tests/Feature/` | Corren **contra MySQL 8.4 real**, no SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. Google y Meta se simulan con `Http::fake`. |
-| **E2E** | **Playwright** (`e2e/`) | El flujo principal en un navegador real: reserva por WhatsApp y verificación en el panel. |
-| **CI** | GitHub Actions | Los dos niveles en cada push y PR. |
+| **E2E** | **Playwright** (`e2e/`), 4 escenarios | El flujo principal y tres caminos de error (colisión de horario, rate limit de Meta y login inválido). Selectores accesibles y oráculos marcados de **interfaz, red y estado**; estables en 3 corridas seguidas. |
+| **Seguridad** | `SeguridadOwaspTest` + workflow `seguridad` | Cabeceras, límites del webhook y XSS, más la auditoría de dependencias, secretos e imagen. |
+| **CI** | GitHub Actions | Todos los niveles en cada push y PR. |
 
 El proyecto se desarrolló con **TDD estricto**, con agentes separados por fase: `tdd-test-writer` escribe el test que falla, `tdd-implementer` lo hace pasar y `tdd-refactorer` limpia.
 
@@ -378,6 +387,7 @@ Algunos tests representativos:
 | `ZonasHorariasTransversalTest` | Conversiones UTC ↔ zona local, incluidos países que eliminaron el horario de verano. Falla si la imagen retrocede de tzdata. |
 | `WhatsAppWebhookIngestionTest` / `WhatsAppWebhookVerificationTest` | Firma inválida → `401`. Handshake con el token de otro tenant → `403`. |
 | `RecordatorioT24hTest` / `RespuestaAlRecordatorioT24hTest` | Envío en ventana y sin duplicados. Confirmar pasa el turno a `confirmed`, cancelar libera el evento. |
+| `e2e/tests/caminos-de-error.spec.ts` + `ReintentoTrasRateLimitTest` | Si Meta limita el envío, la cola reintenta y el cliente igual recibe la respuesta. **El E2E encontró que no pasaba**: el reintento dejaba al cliente sin respuesta. Se bajó a un test de integración en rojo y se corrigió. |
 | `FallbackTest` / `FallbackTercerosTest` | Si cae Google o Meta, el cliente recibe el mensaje de cortesía y la conversación vuelve a `IDLE`. |
 | `SimuladorDeWhatsAppTest` | El webhook simulado pasa la firma real. Los mocks solo existen en desarrollo, y un turno reservado queda ocupado en el Calendar simulado. |
 
@@ -540,18 +550,18 @@ Dos reglas valen para todas las tablas:
 | **integrations** | Conexiones con Meta, Google Calendar y Google Sheets. `account_identifier` es el `phone_number_id` de Meta o el email de Google. | `UNIQUE(provider, account_identifier)`: un número pertenece a un solo negocio, y así la ingesta resuelve el tenant. Tokens y `settings` encriptados. |
 | **business_settings** | Reglas del negocio: horario por día (JSON), duración del turno, buffer, ventana de búsqueda, textos del bot y segundo número humano. | 1:1 con `tenants`. |
 | **lead_spreadsheets** | Planilla de Google Sheets donde se vuelcan los leads. | 1:1 con `tenants`. `spreadsheet_id` único. |
-| **conversations** | La charla con cada cliente final: `current_state`, lo capturado en `context_data`, `state_version` para botones vencidos y marcas de derivación. | N:1 con `tenants`. Índice `(tenant_id, user_phone)`. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
+| **conversations** | La charla con cada cliente final: `current_state`, lo capturado en `context_data`, `state_version` para botones vencidos y marcas de derivación. | N:1 con `tenants`. `UNIQUE(tenant_id, user_phone)`: una conversación por teléfono y negocio, garantizada por la base. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
 | **messages** | Historial completo de entrantes y salientes, con el payload original de Meta. | N:1 con `conversations`. `UNIQUE(tenant_id, whatsapp_message_id)`. Índice `(tenant_id, conversation_id, created_at)`. |
 | **processed_messages** | Ids de Meta ya procesados: idempotencia ante los reintentos del webhook. | `UNIQUE(tenant_id, message_id)`. |
 | **bookings** | Turno reservado y sincronizado con un evento de Google Calendar. | `live_event_id` es una **columna generada** que vale `external_event_id` solo si el turno está vivo. Su `UNIQUE(tenant_id, live_event_id)` impide dos turnos vivos sobre el mismo evento sin bloquear los cancelados. `attendance` va aparte de `status` para no perder que un turno confirmado terminó en ausencia. |
-| **notification_logs** | Auditoría de recordatorios y confirmaciones, con el estado de entrega que informa Meta. | `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. |
+| **notification_logs** | Auditoría de recordatorios y confirmaciones, con el estado de entrega que informa Meta. | `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. Índice `(tenant_id, status)` para el panel de fallidos. |
 | **reconciliation_findings** | Desincronizaciones entre Google y la base ("turnos en duda") y su resolución. | N:1 con `bookings`. `resolved_by` es FK a `users`. `UNIQUE(tenant_id, type, booking_id)`. |
 
 DDL completo y justificación de cada índice: [`04-modelo-de-datos.md`](.claude/docs/02-arquitectura/04-modelo-de-datos.md) (actualizado al esquema real el 2026-11-02).
 
-**Deuda detectada al actualizarlo:**
-- `conversations (tenant_id, user_phone)` no es único: dos primeros mensajes en ráfaga de un número nuevo podrían crear dos conversaciones.
-- `notification_logs` no tiene un índice que lidere con `tenant_id`.
+**Deuda detectada al actualizarlo, corregida en la entrega 2** (migración `2026_11_03_100000`, con su test en rojo antes):
+- `conversations (tenant_id, user_phone)` pasó a único: la ingesta usa `firstOrCreate`, que no es atómico, y dos primeros mensajes en ráfaga podían crear dos conversaciones.
+- `notification_logs` suma `(tenant_id, status)`, que es el filtro del panel de recordatorios fallidos.
 
 ---
 
@@ -774,6 +784,10 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 - **Por qué:** la entrega 1 pide la idea, la estructura y el diseño. El proyecto se construyó spec-first (PRD → story maps → historias → tickets → tests → código), así que la documentación ya existía; el PR la publica en el formato de la plantilla.
 - **Impacto:** solo documentación. Los prompts que no se habían guardado se reconstruyeron y están marcados como tales.
 
-**Pull Request 2** · ⚠️ *Entrega 2:* el simulador de WhatsApp y Google, el E2E con Playwright y el despliegue preparado ya están en la rama `feature/simulador-e2e-despliegue` del repo de código. El PR se documenta acá cuando se abra.
+**Pull Request 2 · [#2 Entrega 2: código funcional de AgendaLlena](https://github.com/diegomottadev/agendallenaia/pull/2)** (`feature-entrega2-DM` → `feature-entrega1-DM`, apilado sobre #1)
+
+- **Qué cambia:** trae el código con su historial completo desde el repo de desarrollo: backend Laravel, panel Vue, MySQL, 609 tests con TDD, un E2E con Playwright, el simulador de WhatsApp y Google Calendar, y el despliegue preparado. Incluye tres correcciones con su test en rojo antes: el «Sin nombre» del panel, el único en `conversations (tenant_id, user_phone)` y el índice `(tenant_id, status)` en `notification_logs`.
+- **Por qué:** la entrega 2 pide backend, frontend y base de datos conectados, con el flujo principal funcionando. Se conservó el historial para que se vea cómo se construyó, ticket por ticket.
+- **Impacto:** el flujo principal (reserva por WhatsApp hasta el turno en el panel) corre de punta a punta en local. Falta la URL pública, y el CI no corre por un bloqueo de facturación de la cuenta de GitHub.
 
 **Pull Request 3** · ⚠️ *Entrega final.*

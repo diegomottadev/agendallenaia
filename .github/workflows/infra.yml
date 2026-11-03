@@ -1,0 +1,121 @@
+# Infraestructura como código (infra/terraform).
+#
+# - En cada PR o push que toque infra/: formato, validación, tflint y Trivy de
+#   configuración. No necesita credenciales.
+# - A mano (workflow_dispatch): `plan`, o `apply` detrás del entorno `infra`
+#   con aprobación manual. Nunca se aplica infraestructura en un push.
+
+name: infra
+
+on:
+  pull_request:
+    paths: ['infra/**', '.github/workflows/infra.yml']
+  push:
+    branches: [main]
+    paths: ['infra/**', '.github/workflows/infra.yml']
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: plan o apply
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-produccion
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+jobs:
+  validar:
+    name: fmt · validate · tflint · Trivy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.53.0
+      - run: tflint --init && tflint --format compact
+      - name: Trivy (misconfiguraciones HIGH/CRITICAL)
+        working-directory: .
+        run: >
+          docker run --rm -v "$PWD":/src aquasec/trivy:0.58.1 config
+          --quiet --exit-code 1 --severity HIGH,CRITICAL /src/infra/terraform
+
+  plan:
+    name: plan
+    if: github.event_name == 'workflow_dispatch'
+    needs: validar
+    runs-on: ubuntu-24.04
+    # Los secretos de DigitalOcean viven solo en los entornos `infra-plan` e `infra`.
+    environment: infra-plan
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET }}
+      TF_VAR_clave_ssh_publica: ${{ vars.SSH_PUBLICA_ADMIN }}
+      TF_VAR_clave_ssh_deploy: ${{ vars.SSH_PUBLICA_DEPLOY }}
+      TF_VAR_ips_de_administracion: ${{ vars.IPS_ADMIN }}
+      TF_VAR_email_alertas: ${{ vars.EMAIL_ALERTAS }}
+      TF_VAR_dominio: ${{ vars.DOMINIO }}
+      TF_VAR_subdominio: ${{ vars.SUBDOMINIO }}
+      BACKEND_HCL: ${{ vars.TF_BACKEND_HCL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: printf '%s\n' "$BACKEND_HCL" > backend.hcl
+      - run: terraform init -input=false -backend-config=backend.hcl
+      - run: terraform plan -input=false -out=plan.tfplan
+      - run: terraform show -no-color plan.tfplan >> "$GITHUB_STEP_SUMMARY"
+      # El plan puede contener valores sensibles: vive un día y solo lo baja `apply`.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: infra/terraform/plan.tfplan
+          retention-days: 1
+
+  apply:
+    name: apply
+    if: github.event_name == 'workflow_dispatch' && inputs.accion == 'apply'
+    needs: plan
+    runs-on: ubuntu-24.04
+    # `infra`: required reviewers. Se aprueba después de leer el plan del job anterior.
+    environment: infra
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET }}
+      TF_VAR_clave_ssh_publica: ${{ vars.SSH_PUBLICA_ADMIN }}
+      TF_VAR_clave_ssh_deploy: ${{ vars.SSH_PUBLICA_DEPLOY }}
+      TF_VAR_ips_de_administracion: ${{ vars.IPS_ADMIN }}
+      TF_VAR_email_alertas: ${{ vars.EMAIL_ALERTAS }}
+      TF_VAR_dominio: ${{ vars.DOMINIO }}
+      TF_VAR_subdominio: ${{ vars.SUBDOMINIO }}
+      BACKEND_HCL: ${{ vars.TF_BACKEND_HCL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: printf '%s\n' "$BACKEND_HCL" > backend.hcl
+      - run: terraform init -input=false -backend-config=backend.hcl
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: infra/terraform
+      - name: Aplicar exactamente el plan aprobado
+        run: terraform apply -input=false plan.tfplan

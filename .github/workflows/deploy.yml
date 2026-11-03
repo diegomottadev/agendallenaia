@@ -1,0 +1,188 @@
+# CD a un droplet de DigitalOcean aprovisionado con infra/terraform.
+# Guía completa: docs/despliegue.md.
+#
+# ⚠️ Apagado hasta que exista el servidor: solo corre si la variable del
+# repositorio DEPLOY_ENABLED vale "true".
+#
+# Tres jobs, cada uno con el mínimo de permisos:
+#   1. verificar  → `tests` y `seguridad` en verde sobre el mismo commit.
+#   2. imagen     → build, Trivy (bloquea CRITICAL/HIGH con arreglo) y push a GHCR.
+#   3. desplegar  → entorno `produccion` (aprobación manual), abre SSH solo para
+#                   la IP de este runner, despliega con rollback y la cierra.
+
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-produccion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  verificar:
+    name: Tests y seguridad en verde
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    steps:
+      - name: Exigir `tests` y `seguridad` exitosos para este commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in tests seguridad; do
+            estado=$(gh api "repos/${{ github.repository }}/actions/workflows/$wf.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')
+            if [ "$estado" = "0" ]; then
+              echo "::error::El workflow '$wf' no terminó en verde para $SHA: no se despliega."
+              exit 1
+            fi
+          done
+
+  imagen:
+    name: Imagen (build · Trivy · GHCR)
+    needs: verificar
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      nombre: ${{ steps.nombre.outputs.imagen }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - id: nombre
+        # GHCR exige minúsculas.
+        run: echo "imagen=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (sin publicar todavía)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/prod/Dockerfile
+          load: true
+          tags: ${{ steps.nombre.outputs.imagen }}:${{ env.SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy sobre la imagen exacta que se va a publicar
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --quiet --exit-code 1
+          --severity CRITICAL,HIGH --ignore-unfixed
+          ${{ steps.nombre.outputs.imagen }}:${{ env.SHA }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar
+        run: |
+          img=${{ steps.nombre.outputs.imagen }}
+          docker tag "$img:$SHA" "$img:latest"
+          docker push "$img:$SHA"
+          docker push "$img:latest"
+
+  desplegar:
+    name: Desplegar en el droplet
+    needs: imagen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Configurar en Settings → Environments → produccion: required reviewers.
+    environment:
+      name: produccion
+      url: https://${{ vars.DOMAIN }}
+    permissions:
+      contents: read
+    env:
+      FIREWALL: ${{ vars.DO_FIREWALL_ID }}
+      HOST: ${{ secrets.DO_HOST }}
+      # docker-compose.prod.yml (droplet propio, infra/terraform) o
+      # docker-compose.compartido.yml (detrás del nginx de un servidor existente).
+      COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      # Token de DigitalOcean con scope mínimo (firewall: read/update). Solo si
+      # el droplet tiene Cloud Firewall: en un servidor existente sin él, SSH ya
+      # está abierto y lo protege fail2ban.
+      - uses: digitalocean/action-doctl@v2
+        if: env.FIREWALL != ''
+        with:
+          token: ${{ secrets.DO_TOKEN_FIREWALL }}
+
+      - name: Abrir SSH solo para la IP de este runner
+        id: ip
+        if: env.FIREWALL != ''
+        run: |
+          ip=$(curl -fsS https://api.ipify.org)
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          doctl compute firewall add-rules "$FIREWALL" --inbound-rules "protocol:tcp,ports:22,address:$ip/32"
+
+      - name: Preparar SSH con la huella fijada del servidor
+        env:
+          CLAVE: ${{ secrets.DO_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DO_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CLAVE" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # StrictHostKeyChecking=yes: si la huella no coincide, no se conecta.
+          printf 'Host droplet\n  HostName %s\n  User deploy\n  IdentityFile ~/.ssh/deploy\n  StrictHostKeyChecking yes\n' "$HOST" > ~/.ssh/config
+
+      - name: Copiar compose y script
+        run: |
+          scp "$COMPOSE_FILE" scripts/deploy/desplegar.sh droplet:/opt/agendallena/
+          if [ "$COMPOSE_FILE" = docker-compose.compartido.yml ]; then
+            ssh droplet "mkdir -p /opt/agendallena/docker/compartido"
+            scp docker/compartido/php.ini droplet:/opt/agendallena/docker/compartido/
+          fi
+
+      # El token viaja por stdin: en la línea de comando quedaría visible en `ps`
+      # del servidor. Las variables pasan por `env`, no interpoladas en el script.
+      - name: Desplegar (con rollback si no responde sano)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IMAGEN: ${{ needs.imagen.outputs.nombre }}
+        run: |
+          # Las variables se expanden acá, en el runner, a propósito.
+          # shellcheck disable=SC2029
+          {
+            printf '%s' "$GHCR_TOKEN" | ssh droplet "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+            s=0
+            ssh droplet "cd /opt/agendallena && chmod 700 desplegar.sh && IMAGE_NAME='$IMAGEN' IMAGE_TAG='$SHA' COMPOSE_FILE='$COMPOSE_FILE' ./desplegar.sh" || s=$?
+            ssh droplet "docker logout ghcr.io >/dev/null"
+          }
+          exit "$s"
+
+      - name: Verificar desde afuera
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "https://${{ vars.DOMAIN }}/up" -o /dev/null
+
+      - name: Cerrar SSH y borrar la clave
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy
+          if [ -n "$FIREWALL" ] && [ -n "${{ steps.ip.outputs.ip }}" ]; then
+            doctl compute firewall remove-rules "$FIREWALL" --inbound-rules "protocol:tcp,ports:22,address:${{ steps.ip.outputs.ip }}/32"
+          fi

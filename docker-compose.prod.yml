@@ -1,0 +1,100 @@
+# Produccion en un droplet de DigitalOcean. Ver docs/despliegue.md.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d
+#
+# La imagen la construye y publica el workflow `deploy` en GHCR; en el servidor
+# solo se hace pull. Los secretos viven en el .env del servidor (chmod 600),
+# nunca en el repositorio ni en la imagen.
+x-app: &app
+  # IMAGE_NAME lo exporta el CD con el repo que publicó la imagen.
+  image: ${IMAGE_NAME:-ghcr.io/diegomottadev/agendallena}:${IMAGE_TAG:-latest}
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  web:
+    <<: *app
+    environment:
+      # Caddy saca el certificado de Let's Encrypt para este dominio.
+      SERVER_NAME: ${DOMAIN:?Falta DOMAIN en el .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - storage:/app/storage
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "--tries=3", "--backoff=5", "--max-time=3600"]
+    volumes:
+      - storage:/app/storage
+
+  # Separado del worker a proposito: son dos procesos que se caen por separado
+  # (ver C4 nivel 2). Sin el, ningun recordatorio sale.
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - storage:/app/storage
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Falta DB_ROOT_PASSWORD en el .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+# Los datos viven en el volumen de DigitalOcean montado en DATA_DIR (lo crea
+# infra/terraform): recrear el droplet no toca la base. Sin DATA_DIR (por
+# ejemplo, probando el compose en local) cae en ./datos.
+x-bind: &bind
+  driver: local
+  driver_opts: &bind-opts
+    type: none
+    o: bind
+
+volumes:
+  caddy-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/caddy-data" }
+  caddy-config:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/caddy-config" }
+  storage:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/storage" }
+  mysql-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/mysql" }
+  redis-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/redis" }

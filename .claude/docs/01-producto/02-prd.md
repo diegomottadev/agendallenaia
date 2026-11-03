@@ -95,7 +95,7 @@ El MVP tiene un único propósito: **demostrar ROI en la primera llamada comerci
 ### Módulo E: Dashboard Admin (Vue 3)
 * **RF-E1 (OAuth Settings):** Botón "Conectar Google Calendar" y monitor de estado de conexión de Meta API.
 * **RF-E2 (Logs Operativos):** Lista de chats atendidos con estado actual, fecha de turno, monto cotizado y enlace directo al evento en Google Calendar.
-* ⚠️ **RF-E3 (Configuración del Negocio) — BORRADOR, pendiente de aprobación.** El tenant configura desde el panel: horario de atención por día, días laborables, duración del turno, *buffer* entre turnos, y los textos de bienvenida y de *fallback*. Hoy **solo persisten `tenants.timezone` y `quote_rules`**: el resto no tiene dónde guardarse, así que RF-B2 está apoyado en valores que ninguna tabla contiene. Requiere la tabla `business_settings` (T-014). Cubre US-15 y T-015 a T-017.
+* ⚠️ **RF-E3 (Configuración del Negocio) — BORRADOR, pendiente de aprobación.** El tenant configura desde el panel: horario de atención por día, días laborables, duración del turno, *buffer* entre turnos, y los textos de bienvenida y de *fallback*. ✅ **Persiste en `business_settings` desde T-014** (horario en JSON con jornada partida, duración, buffer, ventana de búsqueda y los textos del bot), configurable desde el panel. ⚠️ *Corregido el 2026-11-03: decía que solo persistían `tenants.timezone` y `quote_rules`; `quote_rules` nunca existió en la base porque el cotizador quedó diferido.* Cubre US-15 y T-015 a T-017.
   * ⚠️ **Decidir explícitamente** si en el MVP hay pantallas de carga o se cargan por *seeder*. Si los cargamos nosotros, el KPI de tiempo de *setup* lo estamos cumpliendo nosotros, no el producto.
 
 ### Módulo F: Integración Google Sheets
@@ -123,7 +123,7 @@ El MVP tiene un único propósito: **demostrar ROI en la primera llamada comerci
 | :--- | :--- | :--- | :--- |
 | **CA-01** | Handshake Meta | Registrar la URL en el portal de desarrolladores de Meta. | El servidor responde el `hub.challenge` correcto y la URL se valida en verde. |
 | **CA-02** | Agendamiento E2E | Completar el flujo desde WhatsApp con un celular de prueba. | El turno se reserva en WhatsApp y aparece registrado en Google Calendar y Google Sheets. |
-| **CA-03** | Intervención Humana | Escribir un mensaje manual desde el WhatsApp Web/Móvil del negocio. | El bot entra en pausa para ese usuario y no responde automáticamente durante 60 minutos. |
+| **CA-03** | Intervención Humana | Desde el panel, pausar el bot para un cliente y escribirle desde el número del bot. ⚠️ *Corregido el 2026-11-03: decía "escribir desde el WhatsApp del negocio", que la Cloud API no permite (RF-A4).* | El bot no responde automáticamente a ese cliente durante 60 minutos (`Pausa::MINUTOS`), y retoma desde donde había quedado al reactivarlo. |
 | **CA-04** | Timezone Exacto | Agendar turno en un tenant configurado en UTC-3. | El horario guardado en UTC corresponde exactamente a la hora local elegida por el usuario en WhatsApp. |
 | **CA-05** | Recordatorio a 24h | Forzar la fecha del servidor a $t-24\text{ hs}$. | Llega la plantilla con botones. Al presionar "Confirmar", el estado del turno pasa a `confirmed`. |
 | **CA-06** | Fallback ante Caída | Simular credenciales de Google invalidadas durante la reserva. | El sistema envía el mensaje de cortesía al usuario y registra el error en Log. |

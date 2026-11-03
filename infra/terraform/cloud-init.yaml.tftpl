@@ -1,0 +1,134 @@
+#cloud-config
+# Aprovisionamiento del droplet en el primer arranque.
+#
+# Lo que hace, en orden:
+#   1. Usuarios: `admin` (sudo, tu clave) y `deploy` (sin sudo, grupo docker,
+#      clave dedicada al CD). Root y contraseña deshabilitados.
+#   2. SSH endurecido, fail2ban y actualizaciones de seguridad automáticas.
+#   3. Docker y Compose desde los repositorios de Ubuntu (sin `curl | sh`).
+#   4. El volumen de datos montado en /mnt/datos, con las carpetas de la app.
+#   5. Swap de 1 GB, rotación de logs de Docker y dump diario de MySQL.
+#
+# Se renderiza con `templatefile` desde main.tf: solo las variables entre llaves
+# con signo pesos las completa Terraform; el resto del shell usa $var sin llaves.
+
+disable_root: true
+ssh_pwauth: false
+package_update: true
+package_upgrade: true
+
+# Antes que los usuarios: `docker.io` todavía no se instaló cuando se crean.
+groups:
+  - docker
+
+users:
+  - name: admin
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${clave_admin}
+  - name: deploy
+    groups: [docker]
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${clave_deploy}
+
+packages:
+  - docker.io
+  - docker-compose-v2
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - jq
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-agendallena.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      AllowUsers admin deploy
+      MaxAuthTries 3
+      LoginGraceTime 30
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding no
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      findtime = 10m
+      bantime = 1h
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  # Rotación de logs: sin esto, los logs de los contenedores llenan el disco.
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "5" },
+        "live-restore": true,
+        "no-new-privileges": true
+      }
+
+  # Dump diario de MySQL en el volumen, con 14 días de retención. Si existe
+  # /opt/agendallena/.backup.env (claves de Spaces), lo copia también fuera
+  # del servidor.
+  - path: /usr/local/bin/agendallena-backup
+    permissions: "0750"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      cd /opt/agendallena
+      destino=/mnt/datos/backups
+      archivo="$destino/agendallena-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+      docker compose -f docker-compose.prod.yml exec -T mysql \
+        sh -c 'exec mysqldump --single-transaction --routines -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+        | gzip > "$archivo"
+      find "$destino" -name 'agendallena-*.sql.gz' -mtime +14 -delete
+      if [ -f /opt/agendallena/.backup.env ]; then
+        # shellcheck disable=SC1091
+        . /opt/agendallena/.backup.env
+        docker run --rm -v "$destino":/b:ro \
+          -e AWS_ACCESS_KEY_ID="$SPACES_KEY" -e AWS_SECRET_ACCESS_KEY="$SPACES_SECRET" \
+          amazon/aws-cli:2.17.0 s3 cp "/b/$(basename "$archivo")" "s3://$SPACES_BUCKET/" \
+          --endpoint-url "$SPACES_ENDPOINT"
+      fi
+
+  - path: /etc/cron.d/agendallena-backup
+    permissions: "0644"
+    content: |
+      30 6 * * * root /usr/local/bin/agendallena-backup >> /var/log/agendallena-backup.log 2>&1
+
+runcmd:
+  # Volumen de datos: DigitalOcean lo entrega formateado en ext4.
+  - mkdir -p /mnt/datos
+  - echo "/dev/disk/by-id/scsi-0DO_Volume_${nombre_volumen} /mnt/datos ext4 defaults,nofail,discard,noatime 0 2" >> /etc/fstab
+  - mount -a
+  - mkdir -p /mnt/datos/mysql /mnt/datos/redis /mnt/datos/storage /mnt/datos/caddy-data /mnt/datos/caddy-config /mnt/datos/backups
+  - chmod 700 /mnt/datos/backups
+  # Carpeta de la app: el compose y el .env (chmod 600) los deja el CD.
+  - mkdir -p /opt/agendallena
+  - chown deploy:deploy /opt/agendallena
+  - chmod 750 /opt/agendallena
+  # Swap: con 2 GB, MySQL 8.4 + PHP + build de caché pueden rozar el límite.
+  - fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo "/swapfile none swap sw 0 0" >> /etc/fstab
+  - systemctl enable --now docker fail2ban unattended-upgrades
+  - systemctl restart docker
+  - systemctl reload ssh || systemctl reload sshd
