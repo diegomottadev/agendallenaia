@@ -55,3 +55,11 @@ infection.html
 summary.log
 per-mutator.md
 /.infection
+
+# Terraform: el estado vive en Spaces; variables y backend tienen datos del entorno.
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
+infra/terraform/backend.hcl
+infra/terraform/*.tfplan

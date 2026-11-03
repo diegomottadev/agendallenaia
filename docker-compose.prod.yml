@@ -6,7 +6,8 @@
 # solo se hace pull. Los secretos viven en el .env del servidor (chmod 600),
 # nunca en el repositorio ni en la imagen.
 x-app: &app
-  image: ghcr.io/diegomottadev/agendallena:${IMAGE_TAG:-latest}
+  # IMAGE_NAME lo exporta el CD con el repo que publicó la imagen.
+  image: ${IMAGE_NAME:-ghcr.io/diegomottadev/agendallena}:${IMAGE_TAG:-latest}
   env_file: .env
   restart: unless-stopped
   depends_on:
@@ -72,9 +73,28 @@ services:
       timeout: 5s
       retries: 20
 
+# Los datos viven en el volumen de DigitalOcean montado en DATA_DIR (lo crea
+# infra/terraform): recrear el droplet no toca la base. Sin DATA_DIR (por
+# ejemplo, probando el compose en local) cae en ./datos.
+x-bind: &bind
+  driver: local
+  driver_opts: &bind-opts
+    type: none
+    o: bind
+
 volumes:
   caddy-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/caddy-data" }
   caddy-config:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/caddy-config" }
   storage:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/storage" }
   mysql-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/mysql" }
   redis-data:
+    <<: *bind
+    driver_opts: { <<: *bind-opts, device: "${DATA_DIR:-./datos}/redis" }

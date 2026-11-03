@@ -1,11 +1,14 @@
-# CD a un droplet de DigitalOcean. Ver docs/despliegue.md.
+# CD a un droplet de DigitalOcean aprovisionado con infra/terraform.
+# Guía completa: docs/despliegue.md.
 #
 # ⚠️ Apagado hasta que exista el servidor: solo corre si la variable del
-# repositorio DEPLOY_ENABLED vale "true" (Settings → Secrets and variables →
-# Actions → Variables). Asi no falla en rojo mientras no haya donde desplegar.
+# repositorio DEPLOY_ENABLED vale "true".
 #
-# Corre despues de que el workflow `tests` termina en verde sobre main: nunca se
-# despliega un commit con la suite roja.
+# Tres jobs, cada uno con el mínimo de permisos:
+#   1. verificar  → `tests` y `seguridad` en verde sobre el mismo commit.
+#   2. imagen     → build, Trivy (bloquea CRITICAL/HIGH con arreglo) y push a GHCR.
+#   3. desplegar  → entorno `produccion` (aprobación manual), abre SSH solo para
+#                   la IP de este runner, despliega con rollback y la cierra.
 
 name: deploy
 
@@ -20,27 +23,70 @@ concurrency:
   group: deploy-produccion
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
 jobs:
-  deploy:
+  verificar:
+    name: Tests y seguridad en verde
     if: >-
       vars.DEPLOY_ENABLED == 'true' &&
       (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: produccion
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    steps:
+      - name: Exigir `tests` y `seguridad` exitosos para este commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in tests seguridad; do
+            estado=$(gh api "repos/${{ github.repository }}/actions/workflows/$wf.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')
+            if [ "$estado" = "0" ]; then
+              echo "::error::El workflow '$wf' no terminó en verde para $SHA: no se despliega."
+              exit 1
+            fi
+          done
+
+  imagen:
+    name: Imagen (build · Trivy · GHCR)
+    needs: verificar
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-
-    env:
-      IMAGEN: ghcr.io/${{ github.repository }}
-
+    outputs:
+      nombre: ${{ steps.nombre.outputs.imagen }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.SHA }}
+
+      - id: nombre
+        # GHCR exige minúsculas.
+        run: echo "imagen=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
+
+      - name: Build (sin publicar todavía)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/prod/Dockerfile
+          load: true
+          tags: ${{ steps.nombre.outputs.imagen }}:${{ env.SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy sobre la imagen exacta que se va a publicar
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --quiet --exit-code 1
+          --severity CRITICAL,HIGH --ignore-unfixed
+          ${{ steps.nombre.outputs.imagen }}:${{ env.SHA }}
 
       - uses: docker/login-action@v3
         with:
@@ -48,46 +94,83 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Construir y publicar la imagen
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/prod/Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGEN }}:${{ github.event.workflow_run.head_sha || github.sha }}
-            ${{ env.IMAGEN }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publicar
+        run: |
+          img=${{ steps.nombre.outputs.imagen }}
+          docker tag "$img:$SHA" "$img:latest"
+          docker push "$img:$SHA"
+          docker push "$img:latest"
 
-      - name: Copiar el compose de produccion al servidor
-        uses: appleboy/scp-action@v0.1.7
+  desplegar:
+    name: Desplegar en el droplet
+    needs: imagen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Configurar en Settings → Environments → produccion: required reviewers.
+    environment:
+      name: produccion
+      url: https://${{ vars.DOMAIN }}
+    permissions:
+      contents: read
+    env:
+      FIREWALL: ${{ vars.DO_FIREWALL_ID }}
+      HOST: ${{ secrets.DO_HOST }}
+    steps:
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.DO_HOST }}
-          username: ${{ secrets.DO_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
-          source: docker-compose.prod.yml
-          target: /opt/agendallena
+          ref: ${{ env.SHA }}
 
-      - name: Desplegar
-        uses: appleboy/ssh-action@v1.2.0
+      # Token de DigitalOcean con scope mínimo (firewall: read/update).
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_TOKEN_FIREWALL }}
+
+      - name: Abrir SSH solo para la IP de este runner
+        id: ip
+        run: |
+          ip=$(curl -fsS https://api.ipify.org)
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          doctl compute firewall add-rules "$FIREWALL" --inbound-rules "protocol:tcp,ports:22,address:$ip/32"
+
+      - name: Preparar SSH con la huella fijada del servidor
         env:
-          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
-        with:
-          host: ${{ secrets.DO_HOST }}
-          username: ${{ secrets.DO_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
-          envs: IMAGE_TAG
-          script_stop: true
-          script: |
-            cd /opt/agendallena
-            export IMAGE_TAG
-            docker compose -f docker-compose.prod.yml pull web worker scheduler
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker compose -f docker-compose.prod.yml exec -T web php artisan migrate --force
-            # El worker carga el codigo una vez: hay que avisarle que hay version nueva.
-            docker compose -f docker-compose.prod.yml exec -T web php artisan queue:restart
-            docker image prune -f
+          CLAVE: ${{ secrets.DO_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DO_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CLAVE" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # StrictHostKeyChecking=yes: si la huella no coincide, no se conecta.
+          printf 'Host droplet\n  HostName %s\n  User deploy\n  IdentityFile ~/.ssh/deploy\n  StrictHostKeyChecking yes\n' "$HOST" > ~/.ssh/config
 
-      - name: Verificar que responde
-        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "https://${{ vars.DOMAIN }}/login" -o /dev/null
+      - name: Copiar compose y script
+        run: scp docker-compose.prod.yml scripts/deploy/desplegar.sh droplet:/opt/agendallena/
+
+      # El token viaja por stdin: en la línea de comando quedaría visible en `ps`
+      # del servidor. Las variables pasan por `env`, no interpoladas en el script.
+      - name: Desplegar (con rollback si no responde sano)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IMAGEN: ${{ needs.imagen.outputs.nombre }}
+        run: |
+          # Las variables se expanden acá, en el runner, a propósito.
+          # shellcheck disable=SC2029
+          {
+            printf '%s' "$GHCR_TOKEN" | ssh droplet "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+            s=0
+            ssh droplet "cd /opt/agendallena && chmod 700 desplegar.sh && IMAGE_NAME='$IMAGEN' IMAGE_TAG='$SHA' ./desplegar.sh" || s=$?
+            ssh droplet "docker logout ghcr.io >/dev/null"
+          }
+          exit "$s"
+
+      - name: Verificar desde afuera
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "https://${{ vars.DOMAIN }}/up" -o /dev/null
+
+      - name: Cerrar SSH y borrar la clave
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy
+          if [ -n "${{ steps.ip.outputs.ip }}" ]; then
+            doctl compute firewall remove-rules "$FIREWALL" --inbound-rules "protocol:tcp,ports:22,address:${{ steps.ip.outputs.ip }}/32"
+          fi
