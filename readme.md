@@ -540,18 +540,18 @@ Dos reglas valen para todas las tablas:
 | **integrations** | Conexiones con Meta, Google Calendar y Google Sheets. `account_identifier` es el `phone_number_id` de Meta o el email de Google. | `UNIQUE(provider, account_identifier)`: un número pertenece a un solo negocio, y así la ingesta resuelve el tenant. Tokens y `settings` encriptados. |
 | **business_settings** | Reglas del negocio: horario por día (JSON), duración del turno, buffer, ventana de búsqueda, textos del bot y segundo número humano. | 1:1 con `tenants`. |
 | **lead_spreadsheets** | Planilla de Google Sheets donde se vuelcan los leads. | 1:1 con `tenants`. `spreadsheet_id` único. |
-| **conversations** | La charla con cada cliente final: `current_state`, lo capturado en `context_data`, `state_version` para botones vencidos y marcas de derivación. | N:1 con `tenants`. Índice `(tenant_id, user_phone)`. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
+| **conversations** | La charla con cada cliente final: `current_state`, lo capturado en `context_data`, `state_version` para botones vencidos y marcas de derivación. | N:1 con `tenants`. `UNIQUE(tenant_id, user_phone)`: una conversación por teléfono y negocio, garantizada por la base. Es **la fuente de verdad del estado**; Redis solo hace de caché y lock. |
 | **messages** | Historial completo de entrantes y salientes, con el payload original de Meta. | N:1 con `conversations`. `UNIQUE(tenant_id, whatsapp_message_id)`. Índice `(tenant_id, conversation_id, created_at)`. |
 | **processed_messages** | Ids de Meta ya procesados: idempotencia ante los reintentos del webhook. | `UNIQUE(tenant_id, message_id)`. |
 | **bookings** | Turno reservado y sincronizado con un evento de Google Calendar. | `live_event_id` es una **columna generada** que vale `external_event_id` solo si el turno está vivo. Su `UNIQUE(tenant_id, live_event_id)` impide dos turnos vivos sobre el mismo evento sin bloquear los cancelados. `attendance` va aparte de `status` para no perder que un turno confirmado terminó en ausencia. |
-| **notification_logs** | Auditoría de recordatorios y confirmaciones, con el estado de entrega que informa Meta. | `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. |
+| **notification_logs** | Auditoría de recordatorios y confirmaciones, con el estado de entrega que informa Meta. | `UNIQUE(booking_id, type)`: un turno no recibe dos veces el mismo recordatorio. Índice `(tenant_id, status)` para el panel de fallidos. |
 | **reconciliation_findings** | Desincronizaciones entre Google y la base ("turnos en duda") y su resolución. | N:1 con `bookings`. `resolved_by` es FK a `users`. `UNIQUE(tenant_id, type, booking_id)`. |
 
 DDL completo y justificación de cada índice: [`04-modelo-de-datos.md`](.claude/docs/02-arquitectura/04-modelo-de-datos.md) (actualizado al esquema real el 2026-11-02).
 
-**Deuda detectada al actualizarlo:**
-- `conversations (tenant_id, user_phone)` no es único: dos primeros mensajes en ráfaga de un número nuevo podrían crear dos conversaciones.
-- `notification_logs` no tiene un índice que lidere con `tenant_id`.
+**Deuda detectada al actualizarlo, corregida en la entrega 2** (migración `2026_11_03_100000`, con su test en rojo antes):
+- `conversations (tenant_id, user_phone)` pasó a único: la ingesta usa `firstOrCreate`, que no es atómico, y dos primeros mensajes en ráfaga podían crear dos conversaciones.
+- `notification_logs` suma `(tenant_id, status)`, que es el filtro del panel de recordatorios fallidos.
 
 ---
 

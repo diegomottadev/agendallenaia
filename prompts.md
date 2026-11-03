@@ -244,6 +244,12 @@ auditando INVEST y partiendo las historias que no cumplen
 
 **Prompt 2: Pareto sobre los tickets** · ver [sección 1, Prompt 1](#1-descripción-general-del-producto). Además de recortar el MVP, ordenó los tickets en olas y dejó los diferidos en [`tickets/Next-iteraction/`](.claude/docs/tickets/Next-iteraction/).
 
+**Prompt 3: corregir lo que destaparon el E2E y la revisión del modelo** · conversación con Claude Code del 2026-11-03
+
+> Pedido original: *"sí, corregí el bug y los índices"*, y a mitad de camino: *"seria bueno agregar en el agente de test los oraculos de test y satinizacion y prubeas end 2 end y luego de integracion"*.
+
+*Cómo guié al asistente:* cada defecto con su test en rojo antes del código (el bug «Sin nombre», el único en `conversations` y el índice de `notification_logs`), y el arreglo verificado por mutación. Cuando el índice único rompió nueve tests porque sus fixtures fabricaban varias conversaciones del mismo teléfono, el asistente frenó y me pidió permiso antes de tocarlos, como exige `CLAUDE.md`. El E2E pasó a afirmar el nombre en el panel. Además amplié el subagente `tdd-test-writer`: ahora trabaja de afuera hacia adentro (E2E con Playwright → integración → unitario), nombra el **oráculo** de cada afirmación y suma casos de **sanitización** para toda entrada no confiable (WhatsApp, webhook, panel).
+
 ---
 
 ## 7. Pull Requests
