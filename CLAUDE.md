@@ -51,6 +51,14 @@ Estos cuatro son datos y configuración, **no** código, y con la suite en verde
 
 ## ✅ Estado al 2026-08-26: **645 tests en verde · 42 de los 50 tickets construidos**
 
+⚠️ **Verificado el 2026-11-03 en este repositorio (`agendallena` de GitHub): 686 tests, todos en verde en el CI.** Pero **varias cosas que describe esta sección no están en este código**:
+- el aviso t-2h (T-043, `avisos:enviar`, `AvisoT2hTest`);
+- el selector de semana → día → hora (`ListaDeSemanas`, `ListaDeDias`);
+- `EnvioProgramadoDeAviso`;
+- el servicio `scheduler` del `docker-compose.yml` de desarrollo.
+
+En el código hay **4** tareas agendadas, no 5. Lo más probable es que ese trabajo haya quedado en otra copia del proyecto (la de Windows) sin subirse. Hasta confirmarlo, lo que se afirma abajo sobre esas piezas describe esa copia, no este repositorio.
+
 ⚠️ **Los tickets terminados se movieron a `.claude/docs/tickets/Finish/`** con los enlaces reescritos (46 archivos). En `tickets/` quedan solo los 9 frenados por decisión.
 
 ⚠️ **Los 9 tickets que quedan están frenados por decisión, no por falta de trabajo.** No hay ningún ticket pendiente que alguien pueda simplemente ponerse a hacer:
