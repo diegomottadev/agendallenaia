@@ -774,6 +774,10 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 - **Por qué:** la entrega 1 pide la idea, la estructura y el diseño. El proyecto se construyó spec-first (PRD → story maps → historias → tickets → tests → código), así que la documentación ya existía; el PR la publica en el formato de la plantilla.
 - **Impacto:** solo documentación. Los prompts que no se habían guardado se reconstruyeron y están marcados como tales.
 
-**Pull Request 2** · *Entrega 2: código funcional* (`feature-entrega2-DM`). Trae el código con su historial desde el repo de desarrollo: backend, panel, base de datos, tests, E2E, simulador y despliegue preparado. ⚠️ Se documenta acá cuando se abra.
+**Pull Request 2 · [#2 Entrega 2: código funcional de AgendaLlena](https://github.com/diegomottadev/agendallenaia/pull/2)** (`feature-entrega2-DM` → `feature-entrega1-DM`, apilado sobre #1)
+
+- **Qué cambia:** trae el código con su historial completo desde el repo de desarrollo: backend Laravel, panel Vue, MySQL, 609 tests con TDD, un E2E con Playwright, el simulador de WhatsApp y Google Calendar, y el despliegue preparado. Incluye tres correcciones con su test en rojo antes: el «Sin nombre» del panel, el único en `conversations (tenant_id, user_phone)` y el índice `(tenant_id, status)` en `notification_logs`.
+- **Por qué:** la entrega 2 pide backend, frontend y base de datos conectados, con el flujo principal funcionando. Se conservó el historial para que se vea cómo se construyó, ticket por ticket.
+- **Impacto:** el flujo principal (reserva por WhatsApp hasta el turno en el panel) corre de punta a punta en local. Falta la URL pública, y el CI no corre por un bloqueo de facturación de la cuenta de GitHub.
 
 **Pull Request 3** · ⚠️ *Entrega final.*
