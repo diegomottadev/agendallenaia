@@ -810,7 +810,7 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 - **Por qué:** la entrega 2 pide backend, frontend y base de datos conectados, con el flujo principal funcionando. Se conservó el historial para que se vea cómo se construyó, ticket por ticket.
 - **Impacto:** el flujo principal (reserva por WhatsApp hasta el turno en el panel) corre de punta a punta en local. Cuando GitHub levantó un bloqueo de facturación de la cuenta, el CI quedó en verde: 683 de 683, más E2E, `seguridad` e `infra`.
 
-**Pull Request 3 · Entrega final** (`finalproject-DM` → `main`)
+**Pull Request 3 · [#3 Entrega final](https://github.com/diegomottadev/agendallenaia/pull/3)** (`finalproject-DM` → `main`)
 
 - **Qué cambia:** cierra el proyecto con todo lo que se hizo después de la entrega 2.
   - **QA:** E2E con oráculos de interfaz, red y estado y 3 caminos de error; tests unitarios; Infection con MSI 100 %; Eris con 5 propiedades.
