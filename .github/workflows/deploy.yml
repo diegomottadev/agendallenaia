@@ -115,18 +115,25 @@ jobs:
     env:
       FIREWALL: ${{ vars.DO_FIREWALL_ID }}
       HOST: ${{ secrets.DO_HOST }}
+      # docker-compose.prod.yml (droplet propio, infra/terraform) o
+      # docker-compose.compartido.yml (detrás del nginx de un servidor existente).
+      COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SHA }}
 
-      # Token de DigitalOcean con scope mínimo (firewall: read/update).
+      # Token de DigitalOcean con scope mínimo (firewall: read/update). Solo si
+      # el droplet tiene Cloud Firewall: en un servidor existente sin él, SSH ya
+      # está abierto y lo protege fail2ban.
       - uses: digitalocean/action-doctl@v2
+        if: env.FIREWALL != ''
         with:
           token: ${{ secrets.DO_TOKEN_FIREWALL }}
 
       - name: Abrir SSH solo para la IP de este runner
         id: ip
+        if: env.FIREWALL != ''
         run: |
           ip=$(curl -fsS https://api.ipify.org)
           echo "ip=$ip" >> "$GITHUB_OUTPUT"
@@ -144,7 +151,12 @@ jobs:
           printf 'Host droplet\n  HostName %s\n  User deploy\n  IdentityFile ~/.ssh/deploy\n  StrictHostKeyChecking yes\n' "$HOST" > ~/.ssh/config
 
       - name: Copiar compose y script
-        run: scp docker-compose.prod.yml scripts/deploy/desplegar.sh droplet:/opt/agendallena/
+        run: |
+          scp "$COMPOSE_FILE" scripts/deploy/desplegar.sh droplet:/opt/agendallena/
+          if [ "$COMPOSE_FILE" = docker-compose.compartido.yml ]; then
+            ssh droplet "mkdir -p /opt/agendallena/docker/compartido"
+            scp docker/compartido/php.ini droplet:/opt/agendallena/docker/compartido/
+          fi
 
       # El token viaja por stdin: en la línea de comando quedaría visible en `ps`
       # del servidor. Las variables pasan por `env`, no interpoladas en el script.
@@ -159,7 +171,7 @@ jobs:
           {
             printf '%s' "$GHCR_TOKEN" | ssh droplet "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
             s=0
-            ssh droplet "cd /opt/agendallena && chmod 700 desplegar.sh && IMAGE_NAME='$IMAGEN' IMAGE_TAG='$SHA' ./desplegar.sh" || s=$?
+            ssh droplet "cd /opt/agendallena && chmod 700 desplegar.sh && IMAGE_NAME='$IMAGEN' IMAGE_TAG='$SHA' COMPOSE_FILE='$COMPOSE_FILE' ./desplegar.sh" || s=$?
             ssh droplet "docker logout ghcr.io >/dev/null"
           }
           exit "$s"
@@ -171,6 +183,6 @@ jobs:
         if: always()
         run: |
           rm -f ~/.ssh/deploy
-          if [ -n "${{ steps.ip.outputs.ip }}" ]; then
+          if [ -n "$FIREWALL" ] && [ -n "${{ steps.ip.outputs.ip }}" ]; then
             doctl compute firewall remove-rules "$FIREWALL" --inbound-rules "protocol:tcp,ports:22,address:${{ steps.ip.outputs.ip }}/32"
           fi

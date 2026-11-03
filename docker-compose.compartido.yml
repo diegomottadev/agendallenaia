@@ -1,0 +1,71 @@
+# Producción en un servidor COMPARTIDO (droplet chico con otros proyectos).
+# Guía: docs/despliegue-compartido.md
+#
+#   docker compose -f docker-compose.compartido.yml --env-file .env up -d
+#
+# Diferencias con docker-compose.prod.yml (droplet propio):
+#   - El HTTPS lo termina el nginx del host con el certificado comodín: la app
+#     escucha HTTP plano solo en 127.0.0.1, nunca hacia internet.
+#   - Sin MySQL propio: usa el `mysql8` que ya corre en el servidor, con base y
+#     usuario propios, a través de su red de Docker.
+#   - Memoria acotada por contenedor: FrankenPHP con 2 hilos, opcache reducido.
+#     Medido: web ~50 MB, worker y scheduler ~40 MB cada uno, redis < 10 MB.
+x-app: &app
+  image: ${IMAGE_NAME:-ghcr.io/diegomottadev/agendallenaia}:${IMAGE_TAG:-latest}
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - ./storage:/app/storage
+    - ./docker/compartido/php.ini:/usr/local/etc/php/conf.d/zz-zz-compartido.ini:ro
+  networks: [interna, mysql]
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  web:
+    <<: *app
+    environment:
+      # `:80` = HTTP plano, sin que Caddy intente sacar certificados.
+      SERVER_NAME: ":80"
+      FRANKENPHP_CONFIG: "num_threads 2"
+    ports:
+      - "127.0.0.1:${PUERTO_LOCAL:-8083}:80"
+    mem_limit: 160m
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "--tries=3", "--backoff=5", "--max-time=3600", "--memory=96"]
+    mem_limit: 128m
+
+  # Separado del worker a propósito (C4 nivel 2): sin él no sale ningún
+  # recordatorio y no hay ningún síntoma.
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+    mem_limit: 128m
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Solo caché, apartados de horario y locks: sin persistencia y con tope.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "32mb", "--maxmemory-policy", "volatile-lru"]
+    networks: [interna]
+    mem_limit: 48m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  # Subred fija: nginx llega a la app desde el gateway de esta red, y esa IP
+  # va en TRUSTED_PROXIES (172.30.83.1).
+  interna:
+    ipam:
+      config:
+        - subnet: 172.30.83.0/24
+  # La red donde vive el mysql8 existente (ver la guía para averiguarla).
+  mysql:
+    external: true
+    name: ${MYSQL_NETWORK:?Falta MYSQL_NETWORK en el .env}
