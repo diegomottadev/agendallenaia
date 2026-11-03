@@ -383,7 +383,7 @@ Aplica a todo el código que se escriba, propio o de un subagente. Los controles
 | **A07** Autenticación | ✅ Login con límite de intentos y regeneración de sesión. ⚠️ Cuando exista alta de usuarios o cambio de contraseña: `Password::min(12)` y evaluar segundo factor. |
 | **A08** Integridad | Webhooks y callbacks se autentican (HMAC de Meta, `state` firmado de Google) **antes** de tocar código de aplicación. |
 | **A09** Registro | Todo log con `codigo`. Nunca un token, ni parcial (`RedactSecrets`). ⚠️ Faltan alertas de worker y scheduler caídos (`docs/despliegue.md`). |
-| **A10** Condiciones excepcionales | Ningún camino deja al cliente sin respuesta (AC-09.4). ✅ El reintento tras un rate limit de Meta reenvía lo pendiente en vez de reprocesar. |
+| **A10** Condiciones excepcionales | Ningún camino deja al cliente sin respuesta (AC-09.4). ✅ Todo paso que avanza el estado pasa por `PasoEntregado`, la bienvenida incluida: si Meta no entrega el mensaje, la transición se deshace y el reintento recorre el mismo camino. |
 
 ## TDD (PROTECTED)
 

@@ -42,3 +42,5 @@ El arreglo, el rojo y el verde, y la verificación.
 - Test de integración verde y verificado rompiendo el arreglo; E2E 3 de 3.
 - Límite: los envíos posteriores al limitado dentro de un mismo paso no se recuperan.
 - Commit `92d9127`.
+
+**Corrección posterior (mismo día):** la opción B chocaba con `PasoEntregado`, que ya deshacía la transición de cualquier paso cuyo mensaje no se entregaba. El reenvío mandaba una lista sellada para un estado ya revertido, y sus botones llegaban caducos (lo destapó `EntregaTrasFalloDeEnvioTest` al darle el doble de Google que le faltaba). Se revirtió el reenvío y se hizo pasar la bienvenida por `PasoEntregado`, que era el único paso que no lo usaba. `ReintentoTrasRateLimitTest` volvió a rojo con el revert y quedó verde con el arreglo nuevo.
