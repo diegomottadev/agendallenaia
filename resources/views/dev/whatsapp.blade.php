@@ -12,7 +12,7 @@
     <div class="rounded-t-lg bg-emerald-700 px-4 py-3 text-white">
         <div class="flex items-center justify-between">
             <h1 class="font-semibold">Simulador de WhatsApp</h1>
-            <span id="estado" class="rounded bg-emerald-900 px-2 py-0.5 text-xs">—</span>
+            <span id="estado" role="status" aria-label="Estado de la conversación" class="rounded bg-emerald-900 px-2 py-0.5 text-xs">—</span>
         </div>
         <p class="mt-1 text-xs text-emerald-100">Solo desarrollo · Graph API → {{ $graphUrl }}</p>
     </div>
@@ -42,17 +42,17 @@
         </label>
     </div>
 
-    <div id="chat" class="flex-1 space-y-2 overflow-y-auto border-x border-gray-200 bg-[#efeae2] p-3"></div>
+    <div id="chat" role="log" aria-label="Chat" class="flex-1 space-y-2 overflow-y-auto border-x border-gray-200 bg-[#efeae2] p-3"></div>
 
     <form id="form" class="flex gap-2 rounded-b-lg border border-gray-200 bg-white p-2">
-        <input id="texto" autocomplete="off" placeholder="Escribí un mensaje"
+        <input id="texto" autocomplete="off" aria-label="Mensaje" placeholder="Escribí un mensaje"
                class="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm">
         <button class="rounded-full bg-emerald-600 px-4 text-sm font-medium text-white">Enviar</button>
     </form>
-    <p id="error" class="mt-2 text-xs text-red-700"></p>
+    <p id="error" role="alert" class="mt-2 text-xs text-red-700"></p>
 </div>
 
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
 const BOTONES_PLANTILLA = @json($botonesPlantilla);
 const $ = (id) => document.getElementById(id);
 const csrf = document.querySelector('meta[name=csrf-token]').content;
