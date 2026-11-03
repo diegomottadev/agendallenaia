@@ -24,7 +24,7 @@ jobs:
     name: Dependencias (composer audit · npm audit)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: composer audit
         run: docker run --rm -v "$PWD":/app -w /app composer:2.8 audit --locked --no-interaction
       - name: npm audit (high o más)
@@ -34,7 +34,7 @@ jobs:
     name: Secretos en la historia (gitleaks)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks
@@ -44,7 +44,7 @@ jobs:
     name: Imagen de producción (Trivy)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build de la imagen
         run: docker build -f docker/prod/Dockerfile -t agendallena:ci .
       - name: Trivy (CRITICAL y HIGH con arreglo disponible)

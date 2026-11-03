@@ -61,7 +61,7 @@ jobs:
     outputs:
       nombre: ${{ steps.nombre.outputs.imagen }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
 
@@ -119,7 +119,7 @@ jobs:
       # docker-compose.compartido.yml (detrás del nginx de un servidor existente).
       COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.prod.yml' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
 

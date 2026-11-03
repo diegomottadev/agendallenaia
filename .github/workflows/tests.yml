@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `phpunit.xml` fija el nombre de la base de tests, pero hereda host y
       # credenciales del `.env`. Sin este paso la suite se conecta a ningun lado.
@@ -86,7 +86,7 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Preparar el entorno con el simulador encendido
         run: |
