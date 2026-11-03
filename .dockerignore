@@ -21,3 +21,11 @@ tests
 docs
 docker-compose*.yml
 consigna.md
+
+# Infraestructura y CI: no forman parte de la app. infra/terraform/.terraform
+# trae binarios de providers que no tienen nada que hacer en la imagen.
+infra
+scripts
+.github
+build
+infection.json5

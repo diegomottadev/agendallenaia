@@ -25,15 +25,18 @@ COPY . .
 RUN composer dump-autoload --optimize --classmap-authoritative --no-dev
 
 # --- 3 · runtime --------------------------------------------------------------
-FROM dunglas/frankenphp:1.13.4-php8.4-bookworm
+FROM dunglas/frankenphp:1.13.4-php8.4-alpine
 
+# Alpine y no Debian: 387 MB contra 914 MB, con el mismo PHP y las mismas
+# extensiones. Pesa en un VPS chico, donde durante un deploy conviven la imagen
+# vieja y la nueva.
+#
 # OWASP A03 · La base se fija por versión exacta (la actualiza Dependabot) y cada
-# build aplica los parches de seguridad de Debian publicados después de que se
-# armó la imagen: con la 1.11 sin actualizar, Trivy contaba 488 CVE altas o
-# críticas solo en paquetes del sistema.
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# build aplica los parches de seguridad publicados después de que se armó la
+# imagen. `icu-data-full`: Alpine trae solo los datos de ICU en inglés, y `intl`
+# necesita los de español.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache icu-data-full
 
 # Mismas extensiones que la imagen de desarrollo, mas `timezonedb`.
 #
@@ -59,7 +62,7 @@ COPY --from=assets /build/public/build /app/public/build
 COPY docker/prod/entrypoint.sh /usr/local/bin/entrypoint-agendallena
 
 RUN rm -rf tests e2e .claude docker/mysql \
-    && mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
+    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod +x /usr/local/bin/entrypoint-agendallena
 
