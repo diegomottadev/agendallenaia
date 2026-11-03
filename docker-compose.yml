@@ -30,6 +30,20 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # Las tareas agendadas (routes/console.php): expirar conversaciones,
+  # recordatorio t-24h, conciliar con Google y sincronizar plantillas. Sin este
+  # servicio no sale ningún recordatorio y no hay ningún síntoma: la suite queda
+  # verde igual, porque cada comando se prueba llamándolo directo.
+  scheduler:
+    build: .
+    command: php artisan schedule:work
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      app:
+        condition: service_started
+    restart: unless-stopped
+
   # E2E con Playwright (`e2e/`). No arranca con `up`: se corre a demanda con
   #   docker compose --profile e2e run --rm e2e
   # Necesita app y worker levantados y el simulador encendido (META_SIMULADOR,

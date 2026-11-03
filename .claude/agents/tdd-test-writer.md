@@ -126,7 +126,7 @@ Antes de escribir cada `assert`, nombrá su oráculo. Va en el informe.
 | **Especificado** | El texto del AC, del RF o de la documentación de Meta/Google | «Recordatorio a t-24h ± 10 min»; el `X-Hub-Signature-256` es `sha256=` + HMAC del cuerpo crudo |
 | **Calculado a mano** | Un valor que resolviste vos, independiente del código | 15:00 UTC es 12:00 en Buenos Aires; el `wa_id` `549376…` se envía como `54376…` |
 | **Invariante** | Una propiedad que vale para cualquier entrada | Un tenant nunca ve filas de otro; las fechas se guardan en UTC; procesar dos veces el mismo `wamid` deja una sola fila |
-| **Diferencial** | Otro camino que tiene que dar lo mismo | La lista de horarios por el camino rápido y por el selector de semana coinciden para el mismo día |
+| **Diferencial** | Otro camino que tiene que dar lo mismo | El horario que confirma el bot por WhatsApp y el que muestra el panel coinciden, en hora local del negocio |
 | **Del estado de la base** | Leer la fila cruda después de actuar | `start_time` leído sin cast; `notification_logs.status` |
 
 - **Si el AC no da un oráculo** (no dice qué pasa con el valor nulo, con el texto vacío o en el borde de la ventana), no lo inventes en silencio: marcalo con ⚠️ en el informe.
