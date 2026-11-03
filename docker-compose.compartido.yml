@@ -10,7 +10,15 @@
 #     usuario propios, a través de su red de Docker.
 #   - Memoria acotada por contenedor: FrankenPHP con 2 hilos, opcache reducido.
 #     Medido: web ~50 MB, worker y scheduler ~40 MB cada uno, redis < 10 MB.
+# Logs rotados: Docker no los rota por defecto y en un disco de 10 GB crecen
+# hasta llenarlo (en este servidor ya ocupaban 194 MB).
+x-logs: &logs
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
 x-app: &app
+  <<: *logs
   image: ${IMAGE_NAME:-ghcr.io/diegomottadev/agendallenaia}:${IMAGE_TAG:-latest}
   env_file: .env
   restart: unless-stopped
@@ -46,6 +54,7 @@ services:
     mem_limit: 128m
 
   redis:
+    <<: *logs
     image: redis:7-alpine
     restart: unless-stopped
     # Solo caché, apartados de horario y locks: sin persistencia y con tope.
