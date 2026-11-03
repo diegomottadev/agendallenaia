@@ -122,6 +122,26 @@ descripto en el PRD, como dos flowcharts mermaid.
 
 *Cómo guié al asistente:* le pedí que lo dejara **listo y apagado**: un CD que no corre hasta que una variable lo encienda, para no tener builds rojos mientras no exista el servidor. Al construir la imagen de producción detectó que la tzdata de la base era vieja (2025.3 contra el mínimo de 2026.3 que exige la suite de husos) y la resolvió con `timezonedb`, que llevó la tzdata a 2026.6. Resultado: [`docs/despliegue.md`](docs/despliegue.md).
 
+**Prompt 2: DevSecOps con Terraform y CI/CD** · [`2026-11-03-devsecops-terraform-digitalocean-cicd.md`](.claude/prompts/aprobados/2026-11-03-devsecops-terraform-digitalocean-cicd.md)
+
+> Pedido original: *"actues como un especialista SecDevOp [...] me recomiendo la mejor forma de aprovisionar mi servidor en digital y hacer el CI - CD con githubs y que me dieras el codigo de arquitectura para implementar terraform [...] guiate por estos prompots"* (prompts del módulo 13).
+
+*Cómo guié al asistente:* le pedí seguir la técnica del módulo: generar, validar hasta que `terraform validate` pase y revisar la seguridad listando cada cambio. En la revisión de su propio código encontró dos fallas y las corrigió:
+- el token de GHCR quedaba visible en `ps` del servidor;
+- el `apply` se aprobaba sin haber visto el plan.
+
+Trivy marcó el firewall: 80/443 quedaron como riesgo aceptado y documentado, y la salida se limitó por puerto.
+
+**Prompt 3: desplegar en el servidor que ya tenía** · [`2026-11-03-despliegue-servidor-compartido-atiende.md`](.claude/prompts/aprobados/2026-11-03-despliegue-servidor-compartido-atiende.md)
+
+> Pedido original: *"subir a digital [...] similar a esto [nginx de avisos.atiende.lat] pero que se llame agendallenaia.atiende.lat"*, y después *"no quiero usar un droplet nuevo me alcanza la guita"*.
+
+*Cómo guié al asistente:* le pedí trabajar sobre el droplet existente de 512 MB, diagnosticando con comandos de solo lectura que yo corría y le pegaba. Antes de proponer dar de baja un proyecto descubrió que `pedidos_platform` era `admin.atiende.lat`, así que no se tocó. Midió en vez de estimar:
+- **imagen:** Alpine, de 914 a 387 MB;
+- **RAM:** unos 110 MB entre los cuatro contenedores.
+
+También simuló el servidor completo en local. En esa simulación pisó contenedores de mi entorno de desarrollo; lo admitió, lo restauró y lo verificó con E2E. Un detalle de seguridad que puso él: conectar la app a la base por una red propia y no por la de `atiende`, que tiene PHP-FPM sin autenticación.
+
 ### **2.5. Seguridad**
 
 Las reglas de seguridad (firma HMAC, aislamiento por tenant, tokens encriptados, secretos fuera de los logs) son invariantes del proyecto escritos en [`CLAUDE.md`](CLAUDE.md). El agente [`invariantes-auditor`](.claude/agents/invariantes-auditor.md) las verifica en cada cambio de código.
@@ -133,6 +153,17 @@ Las reglas de seguridad (firma HMAC, aislamiento por tenant, tokens encriptados,
 *Cómo guié al asistente:* pedí que lo simulado pasara por el mismo camino que un mensaje real, con firma HMAC, cola y worker. A partir de ahí, la condición de seguridad fue que un endpoint capaz de firmar webhooks con el secreto de Meta **no puede existir en producción**. Por eso `SoloConSimulador` devuelve `404` siempre con `APP_ENV=production`, aunque la variable quede encendida por error, y hay tests que lo verifican.
 
 ⚠️ **Pendiente:** el prompt original con el que se definieron los invariantes de `CLAUDE.md` no se guardó.
+
+**Prompt 2: testing de QA y seguridad OWASP** · conversación con Claude Code del 2026-11-03
+
+> Pedidos originales, en orden: *"verfiica que nos falta complemetnar en lso test"* (contra los prompts del módulo 11), *"1 hazlo y 2 con otro agente ejecutalo"*, *"revisa si hay algo de la oswap para poder aplicar en este proyecto, primero analiza"* y *"Eres experto en ciberseguridad, en base a la evidencia, ejecuta los arreglos necesarios para que cumpla en la medida de este mvp el framework OWASP"*.
+
+*Cómo guié al asistente:* primero le pedí comparar los tests contra lo que enseña el curso, sin tocar nada. Después aprobé el plan:
+- **E2E:** selectores accesibles, oráculos de interfaz, red y estado, caminos de error y helpers.
+- **Unitarios:** reales, verificados por mutación.
+- **Módulo 7:** un subagente aparte instaló Infection y Eris y escribió los comandos de QA.
+
+El E2E del rate limit encontró un **bug real**: el cliente quedaba sin respuesta en el reintento. El asistente me dio dos diseños posibles y elegí. Para seguridad le pedí **analizar primero contra el OWASP Top 10:2025 con evidencia del código**, y recién después aplicar. Las auditorías destaparon vulnerabilidades críticas reales en dependencias y en la imagen base, que se corrigieron y quedaron vigiladas en el CI.
 
 ### **2.6. Tests**
 
@@ -147,6 +178,14 @@ Las reglas de seguridad (firma HMAC, aislamiento por tenant, tokens encriptados,
 > Pedido original: elegí *"Playwright"* para el test E2E de navegador y *"Simular Google"* para que el flujo completo corra en local.
 
 *Cómo guié al asistente:* el E2E tenía que recorrer el flujo **como lo vive cada actor**: el cliente reserva por WhatsApp y la dueña ve el turno en el panel, sin atajos por la base. El mismo test genera las capturas y el video del readme, así la evidencia se regenera con un comando. Al correrlo apareció un **bug real**: el panel muestra "Sin nombre" porque el nombre del cliente no se copia a `conversations.user_name`. Le pedí que no lo tapara en el test: quedó documentado y pendiente de corregir con TDD.
+
+---
+
+**Prompt 3: corregir los tests que salían a la red real** · [`2026-11-03-corregir-tests-desactualizados-google.md`](.claude/prompts/aprobados/2026-11-03-corregir-tests-desactualizados-google.md)
+
+> Pedido original: *"mejor corrigelos"*.
+
+*Cómo guié al asistente:* le pedí tocar solo los dobles de Google que faltaban, con mi permiso test por test. Al hacerlo encontró que su propio arreglo de la mañana, el reenvío tras un rate limit de Meta, chocaba con un mecanismo que ya existía (`PasoEntregado`). Lo revirtió, aplicó el arreglo correcto y más chico, y el CI quedó completo en verde: 683 de 683.
 
 ---
 
@@ -250,17 +289,6 @@ auditando INVEST y partiendo las historias que no cumplen
 
 *Cómo guié al asistente:* cada defecto con su test en rojo antes del código (el bug «Sin nombre», el único en `conversations` y el índice de `notification_logs`), y el arreglo verificado por mutación. Cuando el índice único rompió nueve tests porque sus fixtures fabricaban varias conversaciones del mismo teléfono, el asistente frenó y me pidió permiso antes de tocarlos, como exige `CLAUDE.md`. El E2E pasó a afirmar el nombre en el panel. Además amplié el subagente `tdd-test-writer`: ahora trabaja de afuera hacia adentro (E2E con Playwright → integración → unitario), nombra el **oráculo** de cada afirmación y suma casos de **sanitización** para toda entrada no confiable (WhatsApp, webhook, panel).
 
-**Prompt 4: testing de QA y seguridad OWASP** · conversación con Claude Code del 2026-11-03
-
-> Pedidos originales, en orden: *"verfiica que nos falta complemetnar en lso test"* (contra los prompts del módulo 11), *"1 hazlo y 2 con otro agente ejecutalo"*, *"revisa si hay algo de la oswap para poder aplicar en este proyecto, primero analiza"* y *"Eres experto en ciberseguridad, en base a la evidencia, ejecuta los arreglos necesarios para que cumpla en la medida de este mvp el framework OWASP"*.
-
-*Cómo guié al asistente:* primero le pedí comparar los tests contra lo que enseña el curso, sin tocar nada. Después aprobé el plan:
-- **E2E:** selectores accesibles, oráculos de interfaz, red y estado, caminos de error y helpers.
-- **Unitarios:** reales, verificados por mutación.
-- **Módulo 7:** un subagente aparte instaló Infection y Eris y escribió los comandos de QA.
-
-El E2E del rate limit encontró un **bug real**: el cliente quedaba sin respuesta en el reintento. El asistente me dio dos diseños posibles y elegí. Para seguridad le pedí **analizar primero contra el OWASP Top 10:2025 con evidencia del código**, y recién después aplicar. Las auditorías destaparon vulnerabilidades críticas reales en dependencias y en la imagen base, que se corrigieron y quedaron vigiladas en el CI.
-
 ---
 
 ## 7. Pull Requests
@@ -270,3 +298,13 @@ El E2E del rate limit encontró un **bug real**: el cliente quedaba sin respuest
 > Pedido original: *"necesito crear una rama en https://github.com/diegomottadev/agendallenaia que sea para la documentacion tecnica donde no vaya el codigo del proyecto si no todo lo de .claude y lo que aun falta para la parte de documentacion tecnica"*, y después *"abrí el PR vos"*.
 
 *Cómo guié al asistente:* la rama sigue la convención de la consigna (`feature-entrega1-DM`). Antes de publicar en un repo público le pedí que revisara que `.claude/` no tuviera secretos. La descripción del PR sigue lo que pide la consigna (qué cambia, por qué, impacto) y suma una checklist de pendientes.
+
+**Prompt 2: PR de la entrega 2** · [`2026-11-03-pull-request-entrega-2.md`](.claude/prompts/aprobados/2026-11-03-pull-request-entrega-2.md) · [PR #2](https://github.com/diegomottadev/agendallenaia/pull/2)
+
+*Cómo guié al asistente:* sin el PR #1 mergeado, lo apiló sobre `feature-entrega1-DM` para que el diff mostrara solo el código. Los números de la descripción salieron del código, no de memoria.
+
+**Prompt 3: PR final con todo registrado** · [`2026-11-03-pr-final-entrega-ai4devs.md`](.claude/prompts/aprobados/2026-11-03-pr-final-entrega-ai4devs.md)
+
+> Pedido original: *"necesito subir con todo los prompts nuevos pasados por /meta-prompts y guardados en aprobados [...] todo el codigo actualizado y configuraciones y su justificacion en un nuevo pr"*.
+
+*Cómo guié al asistente:* le pedí que cada prompt de la sesión pasara por `/meta-prompt` antes de archivarse, con el pedido original textual al lado del prompt reescrito, para que se vea la transformación. Se registraron 22 prompts de esta etapa en [`.claude/prompts/aprobados/`](.claude/prompts/aprobados/).

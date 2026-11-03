@@ -33,7 +33,7 @@ Middleware de agendamiento por WhatsApp para PyMEs latinoamericanas de 3 a 20 em
 
 ### **0.4. URL del proyecto:**
 
-⚠️ **Todavía sin URL pública.** El despliegue en DigitalOcean está preparado y probado, pero falta crear el droplet y el subdominio (ver [2.4](#24-infraestructura-y-despliegue)).
+**`https://agendallenaia.atiende.lat`**: ⚠️ **en puesta en marcha.** La aplicación, el despliegue y la configuración del servidor están listos y verificados en una simulación local del servidor real ([2.4](#24-infraestructura-y-despliegue)). Ya se hicieron la limpieza del servidor y la red de la base; faltan el `.env` con las credenciales de Meta y Google y el primer deploy.
 
 Mientras tanto, el proyecto corre en local con Docker ([1.4](#14-instrucciones-de-instalación)), y el flujo completo se puede ver en el [video de la sección 1.3](#13-diseño-y-experiencia-de-usuario).
 
@@ -302,45 +302,65 @@ docs/despliegue.md       # Guía de despliegue en DigitalOcean
 
 ### **2.4. Infraestructura y despliegue**
 
-**Desarrollo y CI.** `docker-compose.yml` levanta `app` (`artisan serve`), `worker` (`queue:work`), `mysql:8.4`, `redis:7-alpine` y, bajo el perfil `e2e`, Playwright. En GitHub Actions (`.github/workflows/tests.yml`), cada push y PR corre dos jobs:
-1. **Suite completa** dentro de la imagen del proyecto, para que los tests de husos usen la misma tzdata que producción, más un paso aparte para los husos horarios.
-2. **E2E con Playwright** con el simulador encendido. Guarda el reporte, el video y las trazas como artefactos.
+**Desarrollo.** `docker-compose.yml` levanta `app` (`artisan serve`), `worker`, `mysql:8.4` y `redis:7-alpine`, más Playwright bajo el perfil `e2e`. El simulador de WhatsApp y de Google Calendar (`/dev/*`) permite desarrollar sin tocar Meta ni Google.
 
-**Producción: preparada, sin desplegar.** Un droplet de DigitalOcean con Docker:
+**CI en GitHub Actions: cuatro workflows, todos en verde.**
+
+| Workflow | Cuándo | Qué hace |
+| :-- | :-- | :-- |
+| `tests` | Cada push y PR | Suite completa dentro de la imagen del proyecto (686 tests, con la misma tzdata que producción), husos horarios aparte y E2E con Playwright, con video y trazas como artefactos |
+| `seguridad` | Cada push y PR, y los lunes | `composer audit`, `npm audit`, gitleaks sobre toda la historia y Trivy sobre la imagen de producción |
+| `infra` | PR que toque `infra/` | Terraform `fmt`, `validate`, tflint y Trivy de configuración. `plan` y `apply` solo a mano, con aprobación |
+| `deploy` | Después de `tests` en verde sobre `main` | Ver abajo. Apagado hasta `DEPLOY_ENABLED=true` |
+
+**Imagen de producción** (`docker/prod/Dockerfile`), multi-stage:
+- assets con Node y vendor sin dependencias de desarrollo;
+- runtime **FrankenPHP 1.13.4 sobre Alpine** (PHP 8.4 con Caddy embebido): **387 MB**, contra 914 MB de la versión Debian;
+- `timezonedb` para tener la tzdata 2026.6 y `icu-data-full` para el español de `intl`;
+- Trivy en 0 CVE altas o críticas con arreglo disponible.
+
+**Dos modos de despliegue, el mismo pipeline:**
+
+| | Servidor compartido (el que se usa) | Droplet propio (preparado) |
+| :-- | :-- | :-- |
+| Dónde | El droplet existente de 512 MB, junto a otros proyectos | Un droplet de 2 GB aprovisionado con **Terraform** |
+| HTTPS | nginx del host con el certificado `*.atiende.lat` | Caddy con Let's Encrypt automático |
+| Base | El `mysql8` existente, con base, usuario y red propios | MySQL en el mismo compose, sobre un Volume con `prevent_destroy` |
+| Archivo | `docker-compose.compartido.yml` | `docker-compose.prod.yml` + `infra/terraform/` |
+| Guía | [`docs/despliegue-compartido.md`](docs/despliegue-compartido.md) | [`docs/despliegue.md`](docs/despliegue.md) |
 
 ```mermaid
 flowchart LR
     subgraph GH["GitHub"]
-        Repo["Repo agendallena"] -->|push a main| CI["Actions: tests + E2E"]
-        CI -->|verde| CD["Actions: deploy"]
-        CD -->|build + push| GHCR[("GHCR")]
+        CI["tests + seguridad"] -->|verde en main| CD["deploy: build → Trivy → GHCR → aprobación"]
     end
-
-    subgraph DO["Droplet DigitalOcean · /opt/agendallena"]
-        Web["web<br>FrankenPHP + Caddy<br>HTTPS Let's Encrypt"]
-        Worker["worker<br>queue:work"]
-        Sched["scheduler<br>schedule:work"]
-        MySQL[("mysql:8.4")]
-        Redis[("redis:7")]
+    subgraph SRV["Droplet nyc1 (compartido)"]
+        NG["nginx del host<br>*.atiende.lat"]
+        NG -->|"agendallenaia → 127.0.0.1:8083"| Web["web<br>FrankenPHP"]
+        Worker["worker"] & Sched["scheduler"] & Web --> Redis[("redis")]
+        Worker & Sched & Web -->|red agendallena_mysql| MySQL[("mysql8 existente<br>base agendallena")]
+        NG -->|otros subdominios| Otros["atiende · pedidos · avisos"]
     end
-
-    Meta["Meta Cloud API"] -->|webhook HTTPS| Web
-    Usuario["Equipo PyME"] -->|HTTPS| Web
-    Web & Worker & Sched --> MySQL & Redis
-    Worker & Sched --> Meta & Google["Google APIs"]
-    CD -->|SSH: pull + up + migrate| DO
-    GHCR -->|docker pull| DO
+    Meta["Meta Cloud API"] -->|webhook HTTPS| NG
+    CD -->|SSH: desplegar.sh| SRV
 ```
 
-- **Imagen** (`docker/prod/Dockerfile`, multi-stage): assets con Node, vendor sin dependencias de desarrollo y runtime **FrankenPHP 1.11**, que es PHP 8.4 con Caddy y da HTTPS automático (Meta lo exige para el webhook). Incluye `timezonedb` para tener la **tzdata 2026.6**: la versión que trae la imagen base es vieja y aplicaría reglas de husos derogadas.
-- **Servicios** (`docker-compose.prod.yml`): `web`, `worker` y `scheduler` sobre la misma imagen, más `mysql` y `redis` con volúmenes persistentes.
-- **CD** (`.github/workflows/deploy.yml`): después de que `tests` termina en verde sobre `main`, construye la imagen, la publica en GHCR y despliega por SSH (`pull`, `up -d`, `migrate --force`, `queue:restart`). **Está apagado** hasta que la variable `DEPLOY_ENABLED` valga `true`.
-- **Secretos:** `.env` en el servidor con `chmod 600`; credenciales SSH en *GitHub Secrets*; tokens OAuth de cada PyME encriptados en la base. `.dockerignore` excluye todo `.env*`, y se verificó que la imagen no lo contiene.
-- **Verificado en local:** la imagen construye, sirve el panel y los assets, y `/dev/whatsapp` devuelve `404` en producción.
+**Cada deploy** (`scripts/deploy/desplegar.sh`):
+1. Exige `tests` y `seguridad` en verde para ese commit.
+2. Construye la imagen, la escanea con Trivy y la publica en GHCR.
+3. Espera la aprobación del entorno `produccion`.
+4. En el servidor: dump de la base, pull, `up`, **`migrate --force`**, `queue:restart` y chequeo de `/up`.
+5. **Si la app no responde sana, vuelve sola a la imagen anterior.**
 
-Guía paso a paso (droplet, DNS, usuario de deploy, secretos, Meta y Google): [`docs/despliegue.md`](docs/despliegue.md).
+Las migraciones corren en cada deploy y tienen que ser compatibles con la versión anterior del código (*expand/contract*), porque el rollback revierte la imagen y no la base.
 
-⚠️ **Pendiente:** crear el droplet y el subdominio y encender el CD. Después, sumar backups automáticos de la base y alertas de worker y scheduler.
+**Terraform para el droplet propio** (`infra/terraform/`):
+- droplet, Volume, IP reservada, VPC y Cloud Firewall (SSH solo desde las IPs de administración, egress limitado por puerto);
+- alertas de CPU, memoria y disco, chequeo de disponibilidad y vencimiento del certificado;
+- estado remoto en Spaces y un cloud-init endurecido (sin root ni contraseña, fail2ban, actualizaciones automáticas);
+- verificado con `terraform validate`, tflint, Trivy config y el esquema oficial de cloud-init.
+
+**Medido en una simulación local del servidor compartido:** HTTPS por nginx con HTTP/2 y HSTS; la app reconoce el proxy y genera links `https://`; `/up` 200, simulador 404 y webhook sin firma 401. Los cuatro contenedores usan **unos 110 MB de RAM**.
 
 ### **2.5. Seguridad**
 
@@ -370,7 +390,7 @@ Revisión completa contra el **OWASP Top 10:2025**, categoría por categoría, c
 | **Unitarios** | PHPUnit 12, `tests/Unit/` (67 tests) | Lógica pura sin base: normalización de teléfonos, palabra de reinicio y las transiciones de la máquina de estados, con reglas que valen para todos los estados (sin callejones sin salida, todo estado alcanzable). |
 | **Propiedades** | **Eris** (`PropiedadesTest`) | Cinco propiedades sobre entradas generadas al azar, incluidos bytes inválidos, emojis y teléfonos de cualquier país: idempotencia de la normalización, nunca lanza, un turno agendado nunca va a `ERROR_FALLBACK`. |
 | **Mutación** | **Infection** (`infection.json5`) | Rompe el código a propósito y exige que algún test lo detecte: **MSI 100 %** (103 de 103 mutantes) sobre las clases críticas, con `minCoveredMsi: 100`. |
-| **Comportamiento e integración** | PHPUnit 12, **más de 600 tests** en `tests/Feature/` | Corren **contra MySQL 8.4 real**, no SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. Google y Meta se simulan con `Http::fake`. |
+| **Comportamiento e integración** | PHPUnit 12, **619 tests** en `tests/Feature/` (686 con los unitarios, todos en verde en el CI) | Corren **contra MySQL 8.4 real**, no SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. Google y Meta se simulan con `Http::fake`. |
 | **E2E** | **Playwright** (`e2e/`), 4 escenarios | El flujo principal y tres caminos de error (colisión de horario, rate limit de Meta y login inválido). Selectores accesibles y oráculos marcados de **interfaz, red y estado**; estables en 3 corridas seguidas. |
 | **Seguridad** | `SeguridadOwaspTest` + workflow `seguridad` | Cabeceras, límites del webhook y XSS, más la auditoría de dependencias, secretos e imagen. |
 | **CI** | GitHub Actions | Todos los niveles en cada push y PR. |
@@ -788,6 +808,15 @@ Los **50 tickets** se derivaron de las historias, partiendo las que fallaban INV
 
 - **Qué cambia:** trae el código con su historial completo desde el repo de desarrollo: backend Laravel, panel Vue, MySQL, 609 tests con TDD, un E2E con Playwright, el simulador de WhatsApp y Google Calendar, y el despliegue preparado. Incluye tres correcciones con su test en rojo antes: el «Sin nombre» del panel, el único en `conversations (tenant_id, user_phone)` y el índice `(tenant_id, status)` en `notification_logs`.
 - **Por qué:** la entrega 2 pide backend, frontend y base de datos conectados, con el flujo principal funcionando. Se conservó el historial para que se vea cómo se construyó, ticket por ticket.
-- **Impacto:** el flujo principal (reserva por WhatsApp hasta el turno en el panel) corre de punta a punta en local. Falta la URL pública, y el CI no corre por un bloqueo de facturación de la cuenta de GitHub.
+- **Impacto:** el flujo principal (reserva por WhatsApp hasta el turno en el panel) corre de punta a punta en local. Cuando GitHub levantó un bloqueo de facturación de la cuenta, el CI quedó en verde: 683 de 683, más E2E, `seguridad` e `infra`.
 
-**Pull Request 3** · ⚠️ *Entrega final.*
+**Pull Request 3 · Entrega final** (`finalproject-DM` → `main`)
+
+- **Qué cambia:** cierra el proyecto con todo lo que se hizo después de la entrega 2.
+  - **QA:** E2E con oráculos de interfaz, red y estado y 3 caminos de error; tests unitarios; Infection con MSI 100 %; Eris con 5 propiedades.
+  - **Seguridad OWASP Top 10:2025:** cabeceras con CSP con nonce, límites del webhook, dependencias críticas corregidas y el workflow `seguridad`.
+  - **DevSecOps:** Terraform para DigitalOcean, CD con aprobación y rollback, y el despliegue en el servidor compartido `agendallenaia.atiende.lat`, con la imagen Alpine de 387 MB.
+  - **Bugs reales corregidos:** «Sin nombre» en el panel, el cliente sin respuesta tras un rate limit de Meta, y los tests que salían a la red real.
+  - **Documentación:** 22 prompts nuevos registrados con `/meta-prompt`.
+- **Por qué:** la entrega final pide el código funcionando, los tests, la documentación cerrada y la evidencia del despliegue.
+- **Impacto:** el CI completo en verde (`tests`, `seguridad`, `infra`) y el despliegue listo para ejecutarse. ⚠️ La URL pública queda activa después del primer deploy en el servidor.
