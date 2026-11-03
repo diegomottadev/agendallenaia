@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Dev\GoogleFalsoController;
 use App\Http\Controllers\Dev\MetaFalsaController;
 use App\Http\Middleware\SoloConSimulador;
+use App\Http\Middleware\LimitarCuerpoDelWebhook;
 use App\Http\Middleware\VerifyMetaSignature;
 use Illuminate\Support\Facades\Route;
 
@@ -55,7 +56,9 @@ Route::prefix('v1/webhooks')->group(function () {
      * `verify_token`.
      */
     Route::post('whatsapp', [WhatsAppWebhookController::class, 'receive'])
-        ->middleware(VerifyMetaSignature::class)
+        // OWASP A06 · Límite de pedidos y de tamaño **antes** de la firma, que
+        // es lo caro: hashear el cuerpo entero de cualquier pedido anónimo.
+        ->middleware(['throttle:webhook-meta', LimitarCuerpoDelWebhook::class, VerifyMetaSignature::class])
         ->name('webhooks.whatsapp.receive');
 });
 

@@ -368,6 +368,23 @@ Salieron de cruzar el backlog contra el DDL. **Cuatro de los cinco se cerraron e
 - **«Un test a la vez»** contra la práctica de despachar un `tdd-test-writer` que escribe ocho o doce tests de una y recién después se implementa. Eso pasó todo el 2026-08-21 y **encontró defectos reales**, pero el rojo llega en lote y no de a uno.
 - **«Nunca modifiques tests existentes sin aprobación explícita»** es más estricto que la regla de la *expectativa vieja* de más abajo, que permitía actualizar un test cuando el comportamiento cambiaba a propósito, con la condición de decirlo. **Ahora primero se pide permiso.** Lo que no cambia: sigue prohibido borrarlo, comentarlo o marcarlo `skipped`.
 
+## Seguridad · OWASP Top 10:2025
+
+Aplica a todo el código que se escriba, propio o de un subagente. Los controles marcados con ✅ ya existen y tienen test; **no se desarman**.
+
+| Categoría | Regla |
+| :-- | :-- |
+| **A01** Control de acceso | Toda tabla de dominio lleva `tenant_id` y el modelo usa `BelongsToTenant`. Nada de `withoutTenantScope()` en código que atiende un request de usuario. Toda ruta del panel lleva `rol:`. Cada endpoint nuevo con `{id}` lleva un test de «no se puede tocar lo de otro tenant». |
+| **A02** Configuración | ✅ `CabecerasDeSeguridad` pone CSP con nonce, `X-Frame-Options`, HSTS y compañía en toda respuesta. **Prohibido `<script>` en línea sin `nonce="{{ Vite::cspNonce() }}"`** y prohibido sumar `'unsafe-inline'` o `'unsafe-eval'` a `script-src`. Producción: `APP_DEBUG=false`, `SESSION_SECURE_COOKIE` y `SESSION_ENCRYPT` en `true`. |
+| **A03** Cadena de suministro | ✅ Workflow `seguridad` (composer audit, npm audit, gitleaks, Trivy) y Dependabot. Antes de sumar una dependencia: decir cuál, para qué y correr `composer audit` / `npm audit`. Imágenes de Docker fijadas por versión exacta. |
+| **A04** Criptografía | Tokens y secretos de terceros, solo con cast `encrypted`. Comparar firmas con `hash_equals`, nunca con `==`. |
+| **A05** Inyección | Solo Eloquent o bindings: nada de SQL concatenado. **Prohibido `{!! !!}`** con datos que vengan de un cliente o de un tercero. Ningún modelo con `$guarded = []`. |
+| **A06** Diseño | ✅ El webhook público tiene `throttle:webhook-meta` y `LimitarCuerpoDelWebhook` **antes** de la firma. Todo endpoint público nuevo, lo mismo. |
+| **A07** Autenticación | ✅ Login con límite de intentos y regeneración de sesión. ⚠️ Cuando exista alta de usuarios o cambio de contraseña: `Password::min(12)` y evaluar segundo factor. |
+| **A08** Integridad | Webhooks y callbacks se autentican (HMAC de Meta, `state` firmado de Google) **antes** de tocar código de aplicación. |
+| **A09** Registro | Todo log con `codigo`. Nunca un token, ni parcial (`RedactSecrets`). ⚠️ Faltan alertas de worker y scheduler caídos (`docs/despliegue.md`). |
+| **A10** Condiciones excepcionales | Ningún camino deja al cliente sin respuesta (AC-09.4). ✅ El reintento tras un rate limit de Meta reenvía lo pendiente en vez de reprocesar. |
+
 ## TDD (PROTECTED)
 
 **Regla de hierro: no se escribe código de implementación sin un test que ya haya fallado.**
