@@ -29,6 +29,7 @@ use App\Conversacion\Transicion;
 use App\Conversacion\TransicionNoDeclarada;
 use App\Models\Conversation;
 use App\Meta\MetaAdapter;
+use App\Meta\MetaRateLimit;
 use App\Models\Booking;
 use App\Models\BusinessSetting;
 use App\Models\Integration;
@@ -474,6 +475,16 @@ class ProcessMessageJob implements ShouldQueue
     /**
      * @param  array<string,mixed>  $message
      */
+    /**
+     * El mensaje saliente que Meta limitó, a la espera del reintento del job.
+     * ⚠️ Si en ese paso faltaban más envíos después del limitado, no se
+     * recuperan: el reintento manda solo el que falló.
+     */
+    private function claveDePendiente(string $tenantId, string $messageId): string
+    {
+        return "meta:pendiente:{$tenantId}:{$messageId}";
+    }
+
     private function procesarMensaje(Integration $integration, array $message): void
     {
         $messageId = $message['id'] ?? null;
@@ -528,7 +539,33 @@ class ProcessMessageJob implements ShouldQueue
             $conversation = $this->resolverConversacion($message);
             $this->persistirEntrante($conversation, $message);
 
-            $this->entregarAlFlujo($integration, $conversation, $message);
+            /*
+             * AC-09.4 · Un reintento tras un rate limit **no reprocesa**: la
+             * transición del primer intento ya se aplicó, y el mismo mensaje en
+             * el estado nuevo cae en un paso que no lo espera — el cliente se
+             * quedaba sin respuesta. Se manda lo que no salió, y nada más.
+             */
+            $pendiente = Cache::get($this->claveDePendiente($integration->tenant_id, $messageId));
+
+            if (is_array($pendiente)) {
+                $this->adapterDe($integration, $conversation)
+                    ->reenviar($conversation, $pendiente['cuerpo'], $pendiente['texto'], $this->recibidoEn);
+                Cache::forget($this->claveDePendiente($integration->tenant_id, $messageId));
+            } else {
+                try {
+                    $this->entregarAlFlujo($integration, $conversation, $message);
+                } catch (MetaRateLimit $e) {
+                    if ($e->cuerpo !== null) {
+                        Cache::put(
+                            $this->claveDePendiente($integration->tenant_id, $messageId),
+                            ['cuerpo' => $e->cuerpo, 'texto' => (string) $e->textoParaElHistorial],
+                            now()->addHour(),
+                        );
+                    }
+
+                    throw $e;
+                }
+            }
 
             /*
              * Se marca **al terminar**, no al empezar. Si `entregarAlFlujo()`

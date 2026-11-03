@@ -30,6 +30,14 @@ class MetaRateLimit extends RuntimeException
         public readonly string $tenantId,
         public readonly int $http,
         public readonly ?int $codigoDeMeta,
+        /**
+         * El mensaje que no salió, para que el reintento lo mande tal cual en
+         * vez de reprocesar un paso cuya transición ya se aplicó.
+         *
+         * @var array<string,mixed>|null
+         */
+        public readonly ?array $cuerpo = null,
+        public readonly ?string $textoParaElHistorial = null,
     ) {
         parent::__construct(
             "Meta limitó el envío del tenant {$tenantId} (HTTP {$http}, código {$codigoDeMeta}). "
