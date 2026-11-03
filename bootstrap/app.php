@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
          * Va en el grupo `web` y no en `api`: los webhooks de Meta no tienen
          * usuario, y el callback de Google resuelve el tenant desde el `state`.
          */
+        // OWASP A02 · Cabeceras de seguridad en toda respuesta, web y API.
+        $middleware->append(App\Http\Middleware\CabecerasDeSeguridad::class);
+
         $middleware->web(append: [
             App\Http\Middleware\EstablecerTenantDeLaSesion::class,
         ]);

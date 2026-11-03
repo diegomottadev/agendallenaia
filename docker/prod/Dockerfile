@@ -25,13 +25,21 @@ COPY . .
 RUN composer dump-autoload --optimize --classmap-authoritative --no-dev
 
 # --- 3 · runtime --------------------------------------------------------------
-FROM dunglas/frankenphp:1.11-php8.4-bookworm
+FROM dunglas/frankenphp:1.13.4-php8.4-bookworm
+
+# OWASP A03 · La base se fija por versión exacta (la actualiza Dependabot) y cada
+# build aplica los parches de seguridad de Debian publicados después de que se
+# armó la imagen: con la 1.11 sin actualizar, Trivy contaba 488 CVE altas o
+# críticas solo en paquetes del sistema.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 # Mismas extensiones que la imagen de desarrollo, mas `timezonedb`.
 #
 # tzdata (T-031): la base de husos que trae el PHP de FrankenPHP queda atras de
-# la que exige ZonasHorariasTransversalTest (2026.3 al escribir esto; la 1.11
-# trae 2025.3). `timezonedb` es la extension PECL que reemplaza esa base por la
+# la que exige ZonasHorariasTransversalTest (2026.3 al escribir esto; la base de FrankenPHP
+# suele traer una anterior). `timezonedb` es la extension PECL que reemplaza esa base por la
 # ultima publicada al momento del build. Sin ella, un turno en un pais que cambio
 # su regla por decreto sale corrido una hora y sin ningun error.
 RUN install-php-extensions pdo_mysql redis bcmath intl zip opcache pcntl timezonedb

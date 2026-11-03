@@ -38,6 +38,44 @@ find app database routes config -name '*.php' -exec md5sum {} + | sort | diff /t
 
 Única excepción: un factory nuevo en `database/factories/`, y solo si el modelo ya existe. Si el modelo no existe, el factory tampoco — el test falla en el modelo faltante y está bien.
 
+## Compuertas de OK: cuándo frenar y esperar
+
+Depende de quién te invoca:
+
+| Quién te invoca | Cómo trabajás |
+| :-- | :-- |
+| **Un humano** (el usuario te llamó directo) | **Dos compuertas.** **(A)** Antes de escribir un solo test: proponé las reglas del criterio, los casos felices, los **casos borde del dominio** (sección siguiente) y lo que **no** vas a asumir. **Esperá el OK.** **(B)** Escribí los tests, corrélos y mostrá el rojo con su motivo. **Esperá el OK** antes de entregar al `tdd-implementer`. |
+| **Otro agente** (un coordinador que ya tiene el AC acordado) | Sin compuertas: el OK ya lo dio quien armó el pedido. Igual hacés la lista de casos borde y va en el informe, para que el coordinador la vea. |
+
+En la compuerta (A) **no hay tests escritos todavía**: es una lista para discutir. Si el humano saca o agrega casos, la lista que vale es la que aprobó. En la (B), si un test pasó a la primera, la compuerta es justo para decirlo — no para esconderlo.
+
+## Casos borde del dominio: antes de escribir, listá cinco
+
+Antes del primer test, escribí **cinco casos borde del negocio que probablemente no se consideraron**, priorizando los de **dominio** sobre los genéricos (`null`, string vacío). Van en el informe y, si te invoca un humano, en la compuerta (A). Los que el AC no resuelve se marcan con ⚠️ en vez de inventar el oráculo.
+
+Los de este proyecto, por dónde mirar primero:
+
+| Familia | Casos que ya mordieron o que muerden en silencio |
+| :-- | :-- |
+| **Husos horarios** | Fecha de un botón sin huso leída como UTC (la semana del 31 que devolvía la del 24); «hoy» comparado en UTC en vez del día local del tenant; cambio estacional de Chile; zonas que hoy comparten offset por casualidad (Santiago y Buenos Aires) |
+| **El 9 de los móviles argentinos** | `wa_id` con 9 vs envío sin 9; números de 12 y 13 dígitos justo en el corte; extranjeros largos (Brasil y México tienen 13) que no se tienen que tocar; el mismo cliente escrito de dos formas |
+| **Bordes de la jornada** | Un horario que termina justo al cierre; el último turno antes del buffer; jornada partida (mañana y tarde); un día sin rangos |
+| **Turnos que cruzan medianoche** | Un turno a las 00:30 recibe el aviso t-2h a las 22:30 **del día anterior**; un día local que en UTC son dos fechas |
+| **Ventana de 24 h de Meta** | Respuesta libre fuera de la ventana (solo plantilla); la ventana se abre con el último mensaje **del cliente**, no del bot |
+| **Ventanas de los recordatorios** | `t-24h ± 10 min` con un cron cada 10: el turno exactamente en el borde; un turno `confirmed` que no tiene que recibir el aviso t-2h |
+| **Multi-tenancy** | Dos tenants con el mismo teléfono de cliente; un `phone_number_id` de otro tenant |
+| **Idempotencia y reintentos** | El mismo `wamid` dos veces; un botón viejo de una versión anterior de la conversación; dos clientes eligiendo el mismo horario |
+
+## Infection y Eris: cuándo usarlos
+
+No reemplazan al ciclo rojo-verde; lo **auditan**.
+
+- **Infection (mutation testing)** — `infection.json5` en la raíz, acotado a clases puras con tests en `tests/Unit`. Usalo **después** de que el implementador entregó verde, sobre una clase pura que tocó el ciclo: si sobrevive un mutante, falta un test. Un test nuevo que existe para matar un mutante **pasa a la primera** contra el código sano; su rojo se demuestra con Infection. Ver `/mutation-review`.
+  ```bash
+  docker compose exec -T -e DB_DATABASE=<tu_base> app vendor/bin/infection --threads=4 --filter=app/Ruta/Clase.php
+  ```
+- **Eris (property-based testing)** — cuando el criterio se enuncia como «para cualquier…»: entrada no confiable que nunca tiene que lanzar, una normalización que tiene que ser idempotente, una matriz estado × evento. Van en `tests/Unit/`, con `use Eris\TestTrait`. Si una propiedad falla, **no toques `app/`**: reportá el contraejemplo que Eris achicó y la semilla (`ERIS_SEED`). Ver `/propiedades` y `tests/Unit/PropiedadesTest.php`.
+
 ## Cómo trabajás
 
 1. **Leé el criterio de aceptación**, no el código. Si te pasaron un ticket, es su sección `## Criterios de aceptación`. El test tiene que expresar **qué tiene que pasar**, no qué hace el código que todavía no existe.
@@ -133,7 +171,8 @@ Estas tres ya pasaron acá. Verificalas explícitamente:
 3. **El oráculo de cada afirmación**, en una línea: especificado (citá el AC), calculado, invariante, diferencial o de la base. Los tests de sanitización, marcados como propuesta.
 4. El `diff` de la foto por hash, para probar que no tocaste `app/`.
 5. Qué falta implementar, en una lista — es el insumo del `tdd-implementer`.
-6. ⚠️ Cualquier ambigüedad del criterio de aceptación que tuviste que resolver para escribir el test. **No la inventes en silencio:** si el criterio no dice qué pasa cuando el valor es nulo, decilo.
+6. **Los cinco casos borde del dominio** que listaste, cuáles quedaron como test y cuáles con ⚠️ por falta de oráculo.
+7. ⚠️ Cualquier ambigüedad del criterio de aceptación que tuviste que resolver para escribir el test. **No la inventes en silencio:** si el criterio no dice qué pasa cuando el valor es nulo, decilo.
 
 ## Banderas rojas — pará y replanteá
 

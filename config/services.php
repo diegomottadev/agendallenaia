@@ -22,6 +22,8 @@ return [
          * variable quede encendida por error: lo corta `SoloConSimulador`.
          */
         'simulador' => (bool) env('META_SIMULADOR', false),
+        // OWASP A06 · Tope de pedidos por minuto y por IP al webhook público.
+        'webhook_por_minuto' => (int) env('META_WEBHOOK_POR_MINUTO', 600),
         'simulador_webhook_url' => env('META_SIMULADOR_WEBHOOK_URL', 'http://localhost:8000/api/v1/webhooks/whatsapp'),
     ],
 

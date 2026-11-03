@@ -1,0 +1,56 @@
+# OWASP A03:2025 · Fallas en la cadena de suministro.
+#
+# Tres controles que no dependen de nadie acordándose de correrlos:
+#   1. Dependencias de PHP y de Node con vulnerabilidades conocidas.
+#   2. Secretos filtrados en cualquier commit de la historia.
+#   3. La imagen de producción: paquetes del sistema y binarios.
+#
+# Corre en cada push y PR, y además todos los lunes: una dependencia que hoy
+# está limpia puede tener un CVE publicado mañana sin que nadie toque el repo.
+name: seguridad
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencias:
+    name: Dependencias (composer audit · npm audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: composer audit
+        run: docker run --rm -v "$PWD":/app -w /app composer:2.8 audit --locked --no-interaction
+      - name: npm audit (high o más)
+        run: docker run --rm -v "$PWD":/w -w /w node:22.12-bookworm-slim npm audit --audit-level=high
+
+  secretos:
+    name: Secretos en la historia (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD":/repo zricethezav/gitleaks:v8.21.2 git /repo --redact --no-banner
+
+  imagen:
+    name: Imagen de producción (Trivy)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build de la imagen
+        run: docker build -f docker/prod/Dockerfile -t agendallena:ci .
+      - name: Trivy (CRITICAL y HIGH con arreglo disponible)
+        # Imagen fijada por versión y ejecutada con docker: no se usa la action
+        # de terceros para no sumar otra dependencia a la cadena que se audita.
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.58.1 image --quiet --exit-code 1
+          --severity CRITICAL,HIGH --ignore-unfixed agendallena:ci

@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Meta\MemoriaDePlantillas;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -27,6 +30,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        /*
+         * OWASP A06 · Límite de pedidos al webhook público, por IP. Meta manda
+         * desde pocas IPs y en ráfagas, así que el tope es holgado: el objetivo
+         * es frenar a quien martilla el endpoint, no a Meta.
+         */
+        RateLimiter::for('webhook-meta', fn (Request $request) => Limit::perMinute(
+            (int) config('services.meta.webhook_por_minuto', 600)
+        )->by($request->ip()));
     }
 }

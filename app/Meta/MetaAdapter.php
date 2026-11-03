@@ -53,6 +53,16 @@ class MetaAdapter
     }
 
     /** Manda texto plano. Solo válido dentro de la ventana de 24 h de Meta. */
+    /**
+     * Manda de nuevo un mensaje que Meta limitó, con el mismo cuerpo.
+     *
+     * @param  array<string,mixed>  $cuerpo
+     */
+    public function reenviar(Conversation $conversacion, array $cuerpo, string $textoParaElHistorial, ?float $recibidoEn = null): ?string
+    {
+        return $this->enviar($conversacion, $cuerpo, $textoParaElHistorial, $recibidoEn);
+    }
+
     public function enviarTexto(Conversation $conversacion, string $texto, ?float $recibidoEn = null): ?string
     {
         return $this->enviar($conversacion, [
@@ -119,6 +129,8 @@ class MetaAdapter
                     (string) $conversacion->tenant_id,
                     $respuesta->status(),
                     is_numeric($respuesta->json('error.code')) ? (int) $respuesta->json('error.code') : null,
+                    $cuerpo,
+                    $textoParaElHistorial,
                 );
             }
 
