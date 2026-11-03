@@ -357,14 +357,23 @@ Guía paso a paso (droplet, DNS, usuario de deploy, secretos, Meta y Google): [`
 | **Ids de botones sellados** | `IdSellado`: un botón viejo o manipulado no ejecuta una acción fuera de su estado. |
 | **Simulador cerrado en producción** | `SoloConSimulador` devuelve `404` en `/dev/*` con `APP_ENV=production`, aunque `META_SIMULADOR` quede encendido: un endpoint que firma webhooks no puede estar expuesto. |
 | **Imagen sin secretos** | `.dockerignore` excluye `.env*`. En producción, `APP_DEBUG=false`, `expose_php=0` y cookies `secure`. |
+| **Cabeceras de seguridad** (OWASP A02) | `CabecerasDeSeguridad` en toda respuesta: CSP con nonce (sin `'unsafe-inline'` en scripts), `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` y HSTS por HTTPS. Sesión cifrada en producción. |
+| **Webhook acotado** (OWASP A06) | Antes de calcular la firma: límite de 600 pedidos por minuto por IP y cuerpo de hasta 256 KB (`413` si lo supera). |
+| **Cadena de suministro** (OWASP A03) | Workflow `seguridad` en cada push, cada PR y todos los lunes: `composer audit`, `npm audit`, gitleaks sobre toda la historia y Trivy sobre la imagen de producción. Dependabot para Composer, npm, Docker y Actions. Al activarlo se corrigieron una vulnerabilidad crítica de `laravel/framework`, una de `shell-quote` y varias altas, y la imagen pasó de 488 CVE altas o críticas a 0 con arreglo disponible. |
+
+Revisión completa contra el **OWASP Top 10:2025**, categoría por categoría, con las reglas que debe seguir todo código nuevo: sección *Seguridad* de [`CLAUDE.md`](CLAUDE.md). ⚠️ Pendiente para cuando haya usuarios reales: regla de contraseña y segundo factor (hoy no hay alta de usuarios) y alertas de worker y scheduler caídos.
 
 ### **2.6. Tests**
 
 | Nivel | Herramienta | Qué cubre |
 | :-- | :-- | :-- |
+| **Unitarios** | PHPUnit 12, `tests/Unit/` (67 tests) | Lógica pura sin base: normalización de teléfonos, palabra de reinicio y las transiciones de la máquina de estados, con reglas que valen para todos los estados (sin callejones sin salida, todo estado alcanzable). |
+| **Propiedades** | **Eris** (`PropiedadesTest`) | Cinco propiedades sobre entradas generadas al azar, incluidos bytes inválidos, emojis y teléfonos de cualquier país: idempotencia de la normalización, nunca lanza, un turno agendado nunca va a `ERROR_FALLBACK`. |
+| **Mutación** | **Infection** (`infection.json5`) | Rompe el código a propósito y exige que algún test lo detecte: **MSI 100 %** (103 de 103 mutantes) sobre las clases críticas, con `minCoveredMsi: 100`. |
 | **Comportamiento e integración** | PHPUnit 12, **más de 600 tests** en `tests/Feature/` | Corren **contra MySQL 8.4 real**, no SQLite, porque el esquema usa columnas generadas, ENUM y bloqueo de filas. Google y Meta se simulan con `Http::fake`. |
-| **E2E** | **Playwright** (`e2e/`) | El flujo principal en un navegador real: reserva por WhatsApp y verificación en el panel. |
-| **CI** | GitHub Actions | Los dos niveles en cada push y PR. |
+| **E2E** | **Playwright** (`e2e/`), 4 escenarios | El flujo principal y tres caminos de error (colisión de horario, rate limit de Meta y login inválido). Selectores accesibles y oráculos marcados de **interfaz, red y estado**; estables en 3 corridas seguidas. |
+| **Seguridad** | `SeguridadOwaspTest` + workflow `seguridad` | Cabeceras, límites del webhook y XSS, más la auditoría de dependencias, secretos e imagen. |
+| **CI** | GitHub Actions | Todos los niveles en cada push y PR. |
 
 El proyecto se desarrolló con **TDD estricto**, con agentes separados por fase: `tdd-test-writer` escribe el test que falla, `tdd-implementer` lo hace pasar y `tdd-refactorer` limpia.
 
@@ -378,6 +387,7 @@ Algunos tests representativos:
 | `ZonasHorariasTransversalTest` | Conversiones UTC ↔ zona local, incluidos países que eliminaron el horario de verano. Falla si la imagen retrocede de tzdata. |
 | `WhatsAppWebhookIngestionTest` / `WhatsAppWebhookVerificationTest` | Firma inválida → `401`. Handshake con el token de otro tenant → `403`. |
 | `RecordatorioT24hTest` / `RespuestaAlRecordatorioT24hTest` | Envío en ventana y sin duplicados. Confirmar pasa el turno a `confirmed`, cancelar libera el evento. |
+| `e2e/tests/caminos-de-error.spec.ts` + `ReintentoTrasRateLimitTest` | Si Meta limita el envío, la cola reintenta y el cliente igual recibe la respuesta. **El E2E encontró que no pasaba**: el reintento dejaba al cliente sin respuesta. Se bajó a un test de integración en rojo y se corrigió. |
 | `FallbackTest` / `FallbackTercerosTest` | Si cae Google o Meta, el cliente recibe el mensaje de cortesía y la conversación vuelve a `IDLE`. |
 | `SimuladorDeWhatsAppTest` | El webhook simulado pasa la firma real. Los mocks solo existen en desarrollo, y un turno reservado queda ocupado en el Calendar simulado. |
 

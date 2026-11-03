@@ -250,6 +250,17 @@ auditando INVEST y partiendo las historias que no cumplen
 
 *Cómo guié al asistente:* cada defecto con su test en rojo antes del código (el bug «Sin nombre», el único en `conversations` y el índice de `notification_logs`), y el arreglo verificado por mutación. Cuando el índice único rompió nueve tests porque sus fixtures fabricaban varias conversaciones del mismo teléfono, el asistente frenó y me pidió permiso antes de tocarlos, como exige `CLAUDE.md`. El E2E pasó a afirmar el nombre en el panel. Además amplié el subagente `tdd-test-writer`: ahora trabaja de afuera hacia adentro (E2E con Playwright → integración → unitario), nombra el **oráculo** de cada afirmación y suma casos de **sanitización** para toda entrada no confiable (WhatsApp, webhook, panel).
 
+**Prompt 4: testing de QA y seguridad OWASP** · conversación con Claude Code del 2026-11-03
+
+> Pedidos originales, en orden: *"verfiica que nos falta complemetnar en lso test"* (contra los prompts del módulo 11), *"1 hazlo y 2 con otro agente ejecutalo"*, *"revisa si hay algo de la oswap para poder aplicar en este proyecto, primero analiza"* y *"Eres experto en ciberseguridad, en base a la evidencia, ejecuta los arreglos necesarios para que cumpla en la medida de este mvp el framework OWASP"*.
+
+*Cómo guié al asistente:* primero le pedí comparar los tests contra lo que enseña el curso, sin tocar nada. Después aprobé el plan:
+- **E2E:** selectores accesibles, oráculos de interfaz, red y estado, caminos de error y helpers.
+- **Unitarios:** reales, verificados por mutación.
+- **Módulo 7:** un subagente aparte instaló Infection y Eris y escribió los comandos de QA.
+
+El E2E del rate limit encontró un **bug real**: el cliente quedaba sin respuesta en el reintento. El asistente me dio dos diseños posibles y elegí. Para seguridad le pedí **analizar primero contra el OWASP Top 10:2025 con evidencia del código**, y recién después aplicar. Las auditorías destaparon vulnerabilidades críticas reales en dependencias y en la imagen base, que se corrigieron y quedaron vigiladas en el CI.
+
 ---
 
 ## 7. Pull Requests
