@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Dev\SimuladorHabilitado;
 use App\Dev\SimuladorDeMeta;
 use App\Models\Integration;
 use Illuminate\Console\Command;
@@ -24,7 +25,7 @@ class SimularWhatsApp extends Command
 
     public function handle(): int
     {
-        if (app()->isProduction() || ! config('services.meta.simulador')) {
+        if (! SimuladorHabilitado::ahora()) {
             $this->error('El simulador está apagado: poné META_SIMULADOR=true en el .env (nunca en producción).');
 
             return self::FAILURE;

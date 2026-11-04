@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Dev\SimuladorHabilitado;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,7 +19,7 @@ class SoloConSimulador
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (app()->isProduction() || ! config('services.meta.simulador')) {
+        if (! SimuladorHabilitado::ahora()) {
             abort(404);
         }
 
