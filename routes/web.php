@@ -12,8 +12,12 @@ use App\Http\Controllers\Panel\TurnosEnDudaController;
 use App\Http\Middleware\SoloConSimulador;
 use Illuminate\Support\Facades\Route;
 
+/*
+ * La raíz no tiene pantalla propia: lleva al login, o al panel si ya hay
+ * sesión. Antes mostraba la bienvenida de Laravel en el dominio público.
+ */
 Route::get('/', function () {
-    return view('welcome');
+    return redirect(auth()->check() ? '/panel' : '/login');
 });
 
 /*
