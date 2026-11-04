@@ -33,9 +33,47 @@ Middleware de agendamiento por WhatsApp para PyMEs latinoamericanas de 3 a 20 em
 
 ### **0.4. URL del proyecto:**
 
-**`https://agendallenaia.atiende.lat`**: ⚠️ **en puesta en marcha.** La aplicación, el despliegue y la configuración del servidor están listos y verificados en una simulación local del servidor real ([2.4](#24-infraestructura-y-despliegue)). Ya se hicieron la limpieza del servidor y la red de la base; faltan el `.env` con las credenciales de Meta y Google y el primer deploy.
+**`https://agendallenaia.atiende.lat`**: **demo publicada**, desplegada por el CD ([2.4](#24-infraestructura-y-despliegue)). Corre con Meta y Google **simulados**, así que se puede recorrer el flujo completo sin teléfono ni cuentas reales.
 
-Mientras tanto, el proyecto corre en local con Docker ([1.4](#14-instrucciones-de-instalación)), y el flujo completo se puede ver en el [video de la sección 1.3](#13-diseño-y-experiencia-de-usuario).
+| Qué | Dónde |
+| :-- | :-- |
+| Panel de la PyME | https://agendallenaia.atiende.lat/login |
+| Chat de WhatsApp simulado (el cliente final) | https://agendallenaia.atiende.lat/dev/whatsapp. El navegador pide usuario **`demo`** y clave **`demo-agendallena`** |
+
+El simulador está detrás de una autenticación básica del nginx, para que los bots que escanean no lleguen a un endpoint que firma webhooks. Los mocks de Meta y Google (`/api/dev/`) no se publican: el worker les habla por dentro de Docker.
+
+**Usuarios de prueba del panel.** Todos con contraseña **`password`**:
+
+| Usuario | Negocio | Rol | Para qué sirve |
+| :-- | :-- | :-- | :-- |
+| `duenia@peluqueria-sur.test` | Peluquería Sur **y** Estética Norte | Dueña | Ve todo. Es el mismo correo en dos negocios, a propósito: muestra que cada negocio ve solo lo suyo |
+| `encargado@peluqueria-sur.test` | Peluquería Sur | Administrador | Gestiona la operación del negocio |
+| `empleada@peluqueria-sur.test` | Peluquería Sur | Equipo | El panel con el permiso más acotado |
+| `empleado@estetica-norte.test` | Estética Norte | Equipo | Un negocio distinto: no ve nada de Peluquería Sur |
+
+> ⚠️ Son credenciales de **demostración**, públicas a propósito. El simulador abierto en el dominio es una excepción explícita para la demo (`META_SIMULADOR_EN_PRODUCCION`, ver [2.5](#25-seguridad)); con clientes reales se apaga.
+
+#### Cómo reservar un turno: el camino feliz
+
+**Del lado del cliente**, en https://agendallenaia.atiende.lat/dev/whatsapp:
+
+1. **Elegí el negocio.** En *Negocio (phone_number_id)* seleccioná **Peluquería Sur**.
+2. **Elegí quién sos.** En *Teléfono del cliente* poné cualquier número nuevo (por ejemplo `5491155550001`) y en *Nombre* un nombre. Cada teléfono es un cliente distinto con su propia conversación; para empezar de cero, cambiá el número.
+3. **Escribí `Hola`** y apretá *Enviar*. El bot contesta en un par de segundos con la bienvenida (*«¡Hola! Gracias por escribirnos…»*) y botones. Arriba a la derecha se ve el **estado de la conversación** de la máquina de estados.
+4. **Tocá «Reservar un turno».** El bot pregunta *«¿A nombre de quién…?»*. Estado: `GATHERING_PARAMS`.
+5. **Escribí el nombre** del cliente. El bot contesta con una **lista de horarios disponibles**: solo los que están libres en el Google Calendar (simulado) del negocio, respetando horario de atención, duración del turno y buffer. Estado: `SELECTING_SLOT`.
+6. **Tocá un horario** (por ejemplo `10:00 hs`). En ese instante el horario queda apartado 5 minutos para vos, se vuelve a consultar la disponibilidad y se crea el evento en el calendario.
+7. **Llega la confirmación:** *«Tu turno quedó reservado…»* con el día y la hora elegidos. Estado: `BOOKED`.
+
+**Del lado de la PyME**, en https://agendallenaia.atiende.lat/login:
+
+8. **Entrá** con `duenia@peluqueria-sur.test` / `password`. Llegás al panel, con el estado de las integraciones.
+9. **Abrí *Conversaciones*.** La conversación del paso 3 aparece **una sola vez**, con el nombre del cliente, el estado **Turno agendado** y el enlace **Ver en Google Calendar**.
+10. **Abrí la conversación** para ver el historial completo, entrantes y salientes, incluida la confirmación del paso 7.
+
+Para comprobar el aislamiento entre negocios, entrá con `empleado@estetica-norte.test`: esa conversación **no** aparece.
+
+Es exactamente el recorrido que automatiza el E2E `e2e/tests/reserva-por-whatsapp.spec.ts`, y el que muestra el [video de la sección 1.3](#13-diseño-y-experiencia-de-usuario). Para correrlo en local, ver [1.4](#14-instrucciones-de-instalación).
 
 ### 0.5. URL o archivo comprimido del repositorio
 
@@ -174,7 +212,7 @@ docker compose exec app php artisan dev:whatsapp:preparar              # WhatsAp
 | Qué | Dónde |
 | :-- | :-- |
 | Chat de WhatsApp simulado | http://localhost:8000/dev/whatsapp |
-| Panel | http://localhost:8000/login, con `duenia@peluqueria-sur.test` / `password` |
+| Panel | http://localhost:8000/login, con `duenia@peluqueria-sur.test` / `password` (todos los usuarios de prueba y el paso a paso, en [0.4](#04-url-del-proyecto)) |
 | Mensaje desde la terminal | `docker compose exec app php artisan dev:whatsapp "hola"` |
 
 **5. Tests**
@@ -375,7 +413,7 @@ Las migraciones corren en cada deploy y tienen que ser compatibles con la versi�
 | **OAuth con `state` firmado** | El callback de Google valida el `state`, que además transporta el tenant. |
 | **CSRF y sesión** | Activos en el panel. Los webhooks van en el grupo `api`, sin sesión: su autenticación es la firma. |
 | **Ids de botones sellados** | `IdSellado`: un botón viejo o manipulado no ejecuta una acción fuera de su estado. |
-| **Simulador cerrado en producción** | `SoloConSimulador` devuelve `404` en `/dev/*` con `APP_ENV=production`, aunque `META_SIMULADOR` quede encendido: un endpoint que firma webhooks no puede estar expuesto. |
+| **Simulador cerrado en producción** | `SoloConSimulador` devuelve `404` en `/dev/*` con `APP_ENV=production`, aunque `META_SIMULADOR` quede encendido: un endpoint que firma webhooks no puede estar expuesto. La única excepción es un permiso explícito, `META_SIMULADOR_EN_PRODUCCION=true`, que usa **la demo publicada** ([0.4](#04-url-del-proyecto)) con un `META_APP_SECRET` de prueba y sin Meta real detrás. La regla vive en `App\Dev\SimuladorHabilitado`. |
 | **Imagen sin secretos** | `.dockerignore` excluye `.env*`. En producción, `APP_DEBUG=false`, `expose_php=0` y cookies `secure`. |
 | **Cabeceras de seguridad** (OWASP A02) | `CabecerasDeSeguridad` en toda respuesta: CSP con nonce (sin `'unsafe-inline'` en scripts), `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` y HSTS por HTTPS. Sesión cifrada en producción. |
 | **Webhook acotado** (OWASP A06) | Antes de calcular la firma: límite de 600 pedidos por minuto por IP y cuerpo de hasta 256 KB (`413` si lo supera). |
