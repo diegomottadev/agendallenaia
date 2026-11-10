@@ -25,7 +25,7 @@ COPY . .
 RUN composer dump-autoload --optimize --classmap-authoritative --no-dev
 
 # --- 3 · runtime --------------------------------------------------------------
-FROM dunglas/frankenphp:1.13.4-php8.4-alpine
+FROM dunglas/frankenphp:1.13.5-php8.4-alpine
 
 # Alpine y no Debian: 387 MB contra 914 MB, con el mismo PHP y las mismas
 # extensiones. Pesa en un VPS chico, donde durante un deploy conviven la imagen
