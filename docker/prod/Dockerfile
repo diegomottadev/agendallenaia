@@ -17,7 +17,7 @@ COPY resources ./resources
 RUN npm run build
 
 # --- 2 · dependencias de PHP sin las de desarrollo ---------------------------
-FROM composer:2.8 AS vendor
+FROM composer:2.11 AS vendor
 WORKDIR /build
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction --ignore-platform-reqs
